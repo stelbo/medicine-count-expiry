@@ -18,14 +18,14 @@ CONF_ENABLE_CAMERA = "enable_camera"
 CONF_CONFIDENCE_THRESHOLD = "confidence_threshold"
 
 # Location presets
-LOCATION_PRESETS = ["bathroom", "kitchen", "bedroom", "living_room", "other"]
+LOCATION_PRESETS = ["bathroom", "kitchen", "bedroom", "living room", "other"]
 
 # Unit presets
 UNIT_PRESETS = ["tablets", "pills", "ml", "mg", "capsules", "drops", "units"]
 
 # Defaults
 DEFAULT_EXPIRY_WARNING_DAYS = 7
-DEFAULT_LOCATIONS = ["bathroom", "kitchen", "bedroom", "living_room"]
+DEFAULT_LOCATIONS = ["bathroom", "kitchen", "bedroom", "living room"]
 DEFAULT_DAILY_DIGEST = False
 DEFAULT_DIGEST_TIME = "08:00:00"
 DEFAULT_AUTO_CLEANUP = False

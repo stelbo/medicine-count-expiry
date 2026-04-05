@@ -191,7 +191,7 @@ class MedicineCountCard extends HTMLElement {
               <label class="form-label">
                 Name <span class="required">*</span>
                 <input class="form-input" name="medicine_name" type="text" required
-                  value="${this._escHtml(sr.medicine_name || "")}" placeholder="e.g. Paracetamol 500mg" autocomplete="off" />
+                  value="${this._escHtml(sr.medicine_name || "")}" placeholder="e.g. Paracetamol 500mg" />
               </label>
               <label class="form-label">
                 Expiry Date <span class="required">*</span>
@@ -215,7 +215,7 @@ class MedicineCountCard extends HTMLElement {
                   <option value="bathroom"/>
                   <option value="kitchen"/>
                   <option value="bedroom"/>
-                  <option value="living_room"/>
+                  <option value="living room"/>
                   <option value="other"/>
                 </datalist>
               </label>
