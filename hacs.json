@@ -1,0 +1,7 @@
+{
+  "name": "Medicine Count & Expiry",
+  "content_in_root": false,
+  "render_readme": true,
+  "filename": "medicine-count-card.js",
+  "homeassistant": "2023.1.0"
+}
