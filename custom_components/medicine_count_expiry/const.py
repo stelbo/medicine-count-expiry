@@ -8,12 +8,32 @@ CONF_CLAUDE_API_KEY = "claude_api_key"
 CONF_EXPIRY_WARNING_DAYS = "expiry_warning_days"
 CONF_NOTIFICATION_SERVICE = "notification_service"
 CONF_DAILY_DIGEST = "daily_digest"
+CONF_DIGEST_TIME = "digest_time"
 CONF_LOCATIONS = "locations"
+CONF_AUTO_CLEANUP = "auto_cleanup"
+CONF_KEEP_DAYS = "keep_days"
+CONF_DEFAULT_LOCATION = "default_location"
+CONF_DEFAULT_UNIT = "default_unit"
+CONF_ENABLE_CAMERA = "enable_camera"
+CONF_CONFIDENCE_THRESHOLD = "confidence_threshold"
+
+# Location presets
+LOCATION_PRESETS = ["bathroom", "kitchen", "bedroom", "living_room", "other"]
+
+# Unit presets
+UNIT_PRESETS = ["tablets", "pills", "ml", "mg", "capsules", "drops", "units"]
 
 # Defaults
-DEFAULT_EXPIRY_WARNING_DAYS = 30
-DEFAULT_LOCATIONS = ["bathroom", "kitchen", "bedroom", "first_aid_kit"]
+DEFAULT_EXPIRY_WARNING_DAYS = 7
+DEFAULT_LOCATIONS = ["bathroom", "kitchen", "bedroom", "living_room"]
 DEFAULT_DAILY_DIGEST = False
+DEFAULT_DIGEST_TIME = "08:00:00"
+DEFAULT_AUTO_CLEANUP = False
+DEFAULT_KEEP_DAYS = 90
+DEFAULT_DEFAULT_LOCATION = "bathroom"
+DEFAULT_DEFAULT_UNIT = "tablets"
+DEFAULT_ENABLE_CAMERA = True
+DEFAULT_CONFIDENCE_THRESHOLD = 70
 
 # Database
 DB_FILE = "medicine_count_expiry.db"

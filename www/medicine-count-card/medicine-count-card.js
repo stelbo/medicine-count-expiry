@@ -168,12 +168,86 @@ class MedicineCountCard extends HTMLElement {
           ${this._error ? `<div class="error-banner">${this._escHtml(this._error)}<button class="dismiss-error">✕</button></div>` : ""}
           ${this._renderSummary()}
           ${this._renderSearchBar()}
-          ${this._showAddForm ? this._renderAddForm() : ""}
           ${this._renderMedicineList()}
         </div>
       </ha-card>
+      ${this._showAddForm ? this._renderModal() : ""}
     `;
     this._attachEventListeners();
+  }
+
+  _renderModal() {
+    const sr = this._scanResult || {};
+    return `
+      <div class="modal-backdrop">
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div class="modal-header">
+            <h3 class="modal-title" id="modal-title">Add Medicine</h3>
+            <button class="icon-btn cancel-add" title="Close dialog">✕</button>
+          </div>
+          <div class="modal-body">
+            ${sr.medicine_name || sr.expiry_date ? '<div class="scan-notice">✅ Pre-filled from scan result</div>' : ""}
+            <div class="form-grid">
+              <label class="form-label">
+                Name <span class="required">*</span>
+                <input class="form-input" name="medicine_name" type="text" required
+                  value="${this._escHtml(sr.medicine_name || "")}" placeholder="e.g. Paracetamol 500mg" autocomplete="off" />
+              </label>
+              <label class="form-label">
+                Expiry Date <span class="required">*</span>
+                <input class="form-input" name="expiry_date" type="date" required
+                  value="${this._escHtml(sr.expiry_date || "")}" />
+              </label>
+              <label class="form-label">
+                Description
+                <input class="form-input" name="description" type="text"
+                  value="${this._escHtml(sr.description || "")}" placeholder="e.g. 500mg tablets" />
+              </label>
+              <label class="form-label">
+                Quantity
+                <input class="form-input" name="quantity" type="number" min="1" value="1" />
+              </label>
+              <label class="form-label">
+                Location
+                <input class="form-input" name="location" type="text"
+                  value="" placeholder="e.g. bathroom" list="location-list" />
+                <datalist id="location-list">
+                  <option value="bathroom"/>
+                  <option value="kitchen"/>
+                  <option value="bedroom"/>
+                  <option value="living_room"/>
+                  <option value="other"/>
+                </datalist>
+              </label>
+              <label class="form-label">
+                Unit
+                <input class="form-input" name="unit" type="text"
+                  value="" placeholder="e.g. tablets" list="unit-list" />
+                <datalist id="unit-list">
+                  <option value="tablets"/>
+                  <option value="pills"/>
+                  <option value="ml"/>
+                  <option value="mg"/>
+                  <option value="capsules"/>
+                  <option value="drops"/>
+                  <option value="units"/>
+                </datalist>
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <label class="scan-btn-label" title="Scan medicine label with camera">
+              📷 Scan Label
+              <input class="scan-input" type="file" accept="image/*" capture="environment" />
+            </label>
+            <div class="modal-actions">
+              <button class="btn btn-secondary cancel-add">Cancel</button>
+              <button class="btn btn-primary submit-add">Add Medicine</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   _renderSummary() {
@@ -224,58 +298,6 @@ class MedicineCountCard extends HTMLElement {
             )
             .join("")}
         </select>
-      </div>
-    `;
-  }
-
-  _renderAddForm() {
-    const sr = this._scanResult || {};
-    return `
-      <div class="add-form">
-        <div class="form-header">
-          <h3>Add Medicine</h3>
-          <button class="icon-btn cancel-add">✕</button>
-        </div>
-        ${sr.medicine_name || sr.expiry_date ? '<div class="scan-notice">✅ Pre-filled from scan result</div>' : ""}
-        <div class="form-grid">
-          <label>
-            Name <span class="required">*</span>
-            <input class="form-input" name="medicine_name" type="text" required
-              value="${this._escHtml(sr.medicine_name || "")}" placeholder="e.g. Paracetamol 500mg" />
-          </label>
-          <label>
-            Expiry Date <span class="required">*</span>
-            <input class="form-input" name="expiry_date" type="date" required
-              value="${this._escHtml(sr.expiry_date || "")}" />
-          </label>
-          <label>
-            Description
-            <input class="form-input" name="description" type="text"
-              value="${this._escHtml(sr.description || "")}" placeholder="e.g. 500mg tablets" />
-          </label>
-          <label>
-            Quantity
-            <input class="form-input" name="quantity" type="number" min="1" value="1" />
-          </label>
-          <label>
-            Location
-            <input class="form-input" name="location" type="text"
-              value="" placeholder="e.g. bathroom" list="location-list" />
-            <datalist id="location-list">
-              <option value="bathroom"/>
-              <option value="kitchen"/>
-              <option value="bedroom"/>
-              <option value="first_aid_kit"/>
-            </datalist>
-          </label>
-        </div>
-        <div class="form-actions">
-          <label class="scan-btn-label">
-            📷 Scan Label
-            <input class="scan-input" type="file" accept="image/*" capture="environment" />
-          </label>
-          <button class="btn btn-primary submit-add">Add Medicine</button>
-        </div>
       </div>
     `;
   }
@@ -429,7 +451,7 @@ class MedicineCountCard extends HTMLElement {
 
     // Submit add form
     root.querySelector(".submit-add")?.addEventListener("click", () => {
-      const form = root.querySelector(".add-form");
+      const form = root.querySelector(".modal-body") || root.querySelector(".add-form");
       const getValue = (name) => form.querySelector(`[name="${name}"]`)?.value?.trim() || "";
 
       const name = getValue("medicine_name");
@@ -446,6 +468,7 @@ class MedicineCountCard extends HTMLElement {
         description: getValue("description"),
         quantity: parseInt(getValue("quantity") || "1", 10),
         location: getValue("location") || "unknown",
+        unit: getValue("unit") || "tablets",
       });
     });
   }
@@ -546,7 +569,47 @@ class MedicineCountCard extends HTMLElement {
       .btn:hover { opacity: 0.85; }
       .btn-primary { background: var(--primary-color, #03a9f4); color: #fff; }
 
-      /* Add form */
+      /* Modal */
+      .modal-backdrop {
+        position: fixed; inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 999; padding: 16px; box-sizing: border-box;
+      }
+      .modal-dialog {
+        background: var(--card-background-color, #fff);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+        width: 100%; max-width: 520px;
+        max-height: 90vh; overflow-y: auto;
+        display: flex; flex-direction: column;
+      }
+      .modal-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 16px 20px 12px;
+        border-bottom: 1px solid var(--divider-color, #e0e0e0);
+        position: sticky; top: 0;
+        background: var(--card-background-color, #fff);
+        z-index: 1;
+      }
+      .modal-title { margin: 0; font-size: 1.1rem; font-weight: 600; }
+      .modal-body { padding: 16px 20px; flex: 1; }
+      .modal-footer {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 12px 20px 16px;
+        border-top: 1px solid var(--divider-color, #e0e0e0);
+        flex-wrap: wrap; gap: 10px;
+        position: sticky; bottom: 0;
+        background: var(--card-background-color, #fff);
+      }
+      .modal-actions { display: flex; gap: 10px; }
+      .btn-secondary {
+        background: var(--secondary-background-color, #f5f5f5);
+        color: var(--primary-text-color, #212121);
+        border: 1px solid var(--divider-color, #ccc);
+      }
+
+      /* Add form (used inside modal) */
       .add-form {
         background: var(--secondary-background-color, #f9f9f9);
         border: 1px solid var(--divider-color, #ddd);
@@ -561,11 +624,8 @@ class MedicineCountCard extends HTMLElement {
         background: #e8f5e9; color: #2e7d32;
         padding: 6px 10px; border-radius: 4px; font-size: 0.8rem; margin-bottom: 10px;
       }
-      .form-grid {
-        display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-        gap: 10px; margin-bottom: 12px;
-      }
-      .form-grid label { display: flex; flex-direction: column; font-size: 0.8rem; color: #555; gap: 4px; }
+      .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px; }
+      .form-grid label, .form-label { display: flex; flex-direction: column; font-size: 0.85rem; color: var(--secondary-text-color, #555); gap: 5px; }
       .form-input {
         padding: 7px 9px; border: 1px solid var(--divider-color, #ccc);
         border-radius: 5px; font-size: 0.875rem;
