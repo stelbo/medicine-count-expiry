@@ -1,0 +1,10 @@
+/*
+ * Medicine Count & Expiry Card - Shared Styles
+ * These styles are exported as a JS template literal for use in
+ * the shadow DOM of the Lovelace card.
+ */
+
+export const styles = `
+  /* Intentionally empty - all styles are inlined in medicine-count-card.js
+     for shadow DOM encapsulation. This file is kept for future extraction. */
+`;

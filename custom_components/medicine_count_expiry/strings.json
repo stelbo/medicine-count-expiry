@@ -1,0 +1,34 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Medicine Count & Expiry Setup",
+        "description": "Configure your Medicine Count & Expiry integration.",
+        "data": {
+          "claude_api_key": "Claude API Key (optional)",
+          "expiry_warning_days": "Expiry Warning Days",
+          "notification_service": "Notification Service",
+          "daily_digest": "Enable Daily Digest"
+        }
+      }
+    },
+    "error": {
+      "invalid_api_key": "Invalid Claude API key. Please check and try again."
+    },
+    "abort": {
+      "already_configured": "Medicine Count & Expiry is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Medicine Count & Expiry Options",
+        "data": {
+          "expiry_warning_days": "Expiry Warning Days",
+          "notification_service": "Notification Service",
+          "daily_digest": "Enable Daily Digest"
+        }
+      }
+    }
+  }
+}
