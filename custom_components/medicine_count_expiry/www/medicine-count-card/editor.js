@@ -56,6 +56,17 @@ class MedicineCountCardEditor extends HTMLElement {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
   }
+
+  // 🔴 MISSING - ADD THESE TWO METHODS 🔴
+  static getConfigElement() {
+    return document.createElement("medicine-count-card-editor");
+  }
+
+  static getStubConfig() {
+    return {
+      type: "medicine-count-card"
+    };
+  }
 }
 
 customElements.define("medicine-count-card-editor", MedicineCountCardEditor);
