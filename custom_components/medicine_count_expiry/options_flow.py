@@ -1,4 +1,4 @@
-"""Config flow for Medicine Count & Expiry integration."""
+"""Options flow for Medicine Count & Expiry integration."""
 from __future__ import annotations
 
 import logging
@@ -45,7 +45,6 @@ from .const import (
     DEFAULT_EXPIRY_WARNING_DAYS,
     DEFAULT_KEEP_DAYS,
     DEFAULT_LOCATIONS,
-    DOMAIN,
     LOCATION_PRESETS,
     UNIT_PRESETS,
 )
@@ -53,16 +52,20 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class MedicineCountExpiryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Medicine Count & Expiry."""
+def _get(entry: config_entries.ConfigEntry, key: str, default: Any) -> Any:
+    """Get a value from options first, then data, then fall back to default."""
+    return entry.options.get(key, entry.data.get(key, default))
 
-    VERSION = 1
 
-    def __init__(self) -> None:
-        """Initialize the config flow."""
+class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
+    """Handle options flow for Medicine Count & Expiry."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
         self._data: dict[str, Any] = {}
 
-    async def async_step_user(
+    async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Step 1: API Configuration."""
@@ -77,12 +80,12 @@ class MedicineCountExpiryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_notifications()
 
         return self.async_show_form(
-            step_id="user",
+            step_id="init",
             data_schema=vol.Schema(
                 {
                     vol.Optional(
                         CONF_CLAUDE_API_KEY,
-                        default=self._data.get(CONF_CLAUDE_API_KEY, ""),
+                        default=_get(self.config_entry, CONF_CLAUDE_API_KEY, ""),
                     ): TextSelector(
                         TextSelectorConfig(type=TextSelectorType.PASSWORD)
                     ),
@@ -105,8 +108,10 @@ class MedicineCountExpiryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Optional(
                         CONF_EXPIRY_WARNING_DAYS,
-                        default=self._data.get(
-                            CONF_EXPIRY_WARNING_DAYS, DEFAULT_EXPIRY_WARNING_DAYS
+                        default=_get(
+                            self.config_entry,
+                            CONF_EXPIRY_WARNING_DAYS,
+                            DEFAULT_EXPIRY_WARNING_DAYS,
                         ),
                     ): NumberSelector(
                         NumberSelectorConfig(
@@ -115,15 +120,19 @@ class MedicineCountExpiryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                     vol.Optional(
                         CONF_DAILY_DIGEST,
-                        default=self._data.get(CONF_DAILY_DIGEST, DEFAULT_DAILY_DIGEST),
+                        default=_get(
+                            self.config_entry, CONF_DAILY_DIGEST, DEFAULT_DAILY_DIGEST
+                        ),
                     ): BooleanSelector(),
                     vol.Optional(
                         CONF_DIGEST_TIME,
-                        default=self._data.get(CONF_DIGEST_TIME, DEFAULT_DIGEST_TIME),
+                        default=_get(
+                            self.config_entry, CONF_DIGEST_TIME, DEFAULT_DIGEST_TIME
+                        ),
                     ): TimeSelector(TimeSelectorConfig()),
                     vol.Optional(
                         CONF_NOTIFICATION_SERVICE,
-                        default=self._data.get(CONF_NOTIFICATION_SERVICE, ""),
+                        default=_get(self.config_entry, CONF_NOTIFICATION_SERVICE, ""),
                     ): TextSelector(TextSelectorConfig(type=TextSelectorType.TEXT)),
                 }
             ),
@@ -143,7 +152,9 @@ class MedicineCountExpiryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Optional(
                         CONF_LOCATIONS,
-                        default=self._data.get(CONF_LOCATIONS, DEFAULT_LOCATIONS),
+                        default=_get(
+                            self.config_entry, CONF_LOCATIONS, DEFAULT_LOCATIONS
+                        ),
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=LOCATION_PRESETS,
@@ -153,11 +164,15 @@ class MedicineCountExpiryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                     vol.Optional(
                         CONF_AUTO_CLEANUP,
-                        default=self._data.get(CONF_AUTO_CLEANUP, DEFAULT_AUTO_CLEANUP),
+                        default=_get(
+                            self.config_entry, CONF_AUTO_CLEANUP, DEFAULT_AUTO_CLEANUP
+                        ),
                     ): BooleanSelector(),
                     vol.Optional(
                         CONF_KEEP_DAYS,
-                        default=self._data.get(CONF_KEEP_DAYS, DEFAULT_KEEP_DAYS),
+                        default=_get(
+                            self.config_entry, CONF_KEEP_DAYS, DEFAULT_KEEP_DAYS
+                        ),
                     ): NumberSelector(
                         NumberSelectorConfig(
                             min=30, max=365, step=1, mode=NumberSelectorMode.SLIDER
@@ -173,12 +188,7 @@ class MedicineCountExpiryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Step 4: Medicine Defaults."""
         if user_input is not None:
             self._data.update(user_input)
-            await self.async_set_unique_id(DOMAIN)
-            self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title="Medicine Count & Expiry",
-                data=self._data,
-            )
+            return self.async_create_entry(title="", data=self._data)
 
         return self.async_show_form(
             step_id="defaults",
@@ -186,8 +196,10 @@ class MedicineCountExpiryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Optional(
                         CONF_DEFAULT_LOCATION,
-                        default=self._data.get(
-                            CONF_DEFAULT_LOCATION, DEFAULT_DEFAULT_LOCATION
+                        default=_get(
+                            self.config_entry,
+                            CONF_DEFAULT_LOCATION,
+                            DEFAULT_DEFAULT_LOCATION,
                         ),
                     ): SelectSelector(
                         SelectSelectorConfig(
@@ -197,7 +209,9 @@ class MedicineCountExpiryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                     vol.Optional(
                         CONF_DEFAULT_UNIT,
-                        default=self._data.get(CONF_DEFAULT_UNIT, DEFAULT_DEFAULT_UNIT),
+                        default=_get(
+                            self.config_entry, CONF_DEFAULT_UNIT, DEFAULT_DEFAULT_UNIT
+                        ),
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=UNIT_PRESETS,
@@ -206,12 +220,18 @@ class MedicineCountExpiryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                     vol.Optional(
                         CONF_ENABLE_CAMERA,
-                        default=self._data.get(CONF_ENABLE_CAMERA, DEFAULT_ENABLE_CAMERA),
+                        default=_get(
+                            self.config_entry,
+                            CONF_ENABLE_CAMERA,
+                            DEFAULT_ENABLE_CAMERA,
+                        ),
                     ): BooleanSelector(),
                     vol.Optional(
                         CONF_CONFIDENCE_THRESHOLD,
-                        default=self._data.get(
-                            CONF_CONFIDENCE_THRESHOLD, DEFAULT_CONFIDENCE_THRESHOLD
+                        default=_get(
+                            self.config_entry,
+                            CONF_CONFIDENCE_THRESHOLD,
+                            DEFAULT_CONFIDENCE_THRESHOLD,
                         ),
                     ): NumberSelector(
                         NumberSelectorConfig(
@@ -237,10 +257,3 @@ class MedicineCountExpiryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except Exception as e:
             _LOGGER.debug("API key validation failed: %s", e)
             return False
-
-    @staticmethod
-    def async_get_options_flow(config_entry: config_entries.ConfigEntry):
-        """Return options flow."""
-        from .options_flow import MedicineCountExpiryOptionsFlow
-
-        return MedicineCountExpiryOptionsFlow(config_entry)
