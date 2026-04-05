@@ -21,12 +21,19 @@ from .const import (
     DOMAIN,
     PLATFORMS,
 )
+from .frontend import async_register_frontend
 from .notifications.alerts import MedicineAlerts
 from .search.search_engine import MedicineSearchEngine
 from .services import async_setup_services
 from .storage.database import MedicineDatabase
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Set up the Medicine Count & Expiry component."""
+    await async_register_frontend(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

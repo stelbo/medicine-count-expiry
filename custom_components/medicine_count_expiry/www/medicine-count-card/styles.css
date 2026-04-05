@@ -1,0 +1,5 @@
+/*
+ * Medicine Count & Expiry Card - Shared Styles
+ * All card styles are inlined in the shadow DOM of medicine-count-card.js
+ * for full encapsulation. This file is reserved for future extraction.
+ */
