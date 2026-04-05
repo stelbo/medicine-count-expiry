@@ -11,11 +11,11 @@ add_medicine:
         text:
     expiry_date:
       name: Expiry Date
-      description: The expiry date of the medicine (YYYY-MM-DD).
+      description: The expiry date of the medicine.
       required: true
       example: "2025-12-31"
       selector:
-        text:
+        date:
     description:
       name: Description
       description: Optional description or dosage information.
@@ -70,11 +70,11 @@ update_medicine:
         text:
     expiry_date:
       name: Expiry Date
-      description: Updated expiry date (YYYY-MM-DD).
+      description: Updated expiry date.
       required: false
       example: "2025-12-31"
       selector:
-        text:
+        date:
     description:
       name: Description
       description: Updated description or dosage information.
@@ -139,18 +139,18 @@ search_medicines:
         text:
     expiry_before:
       name: Expiry Before
-      description: Filter medicines expiring before this date (YYYY-MM-DD).
+      description: Filter medicines expiring before this date.
       required: false
       example: "2025-01-01"
       selector:
-        text:
+        date:
     expiry_after:
       name: Expiry After
-      description: Filter medicines expiring after this date (YYYY-MM-DD).
+      description: Filter medicines expiring after this date.
       required: false
       example: "2024-01-01"
       selector:
-        text:
+        date:
     status:
       name: Status
       description: Filter by expiry status.
