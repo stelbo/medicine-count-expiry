@@ -69,15 +69,9 @@ class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Step 1: API Configuration."""
-        errors: dict[str, str] = {}
-
         if user_input is not None:
-            api_key = user_input.get(CONF_CLAUDE_API_KEY, "")
-            if api_key and not await self._validate_claude_key(api_key):
-                errors[CONF_CLAUDE_API_KEY] = "invalid_api_key"
-            else:
-                self._data.update(user_input)
-                return await self.async_step_notifications()
+            self._data.update(user_input)
+            return await self.async_step_notifications()
 
         return self.async_show_form(
             step_id="init",
@@ -91,7 +85,6 @@ class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
                     ),
                 }
             ),
-            errors=errors,
         )
 
     async def async_step_notifications(
@@ -241,19 +234,3 @@ class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
                 }
             ),
         )
-
-    async def _validate_claude_key(self, api_key: str) -> bool:
-        """Validate the Claude API key by making a minimal test request."""
-        try:
-            import anthropic
-
-            client = anthropic.Anthropic(api_key=api_key)
-            client.messages.create(
-                model="claude-3-haiku-20240307",
-                max_tokens=10,
-                messages=[{"role": "user", "content": "test"}],
-            )
-            return True
-        except Exception as e:
-            _LOGGER.debug("API key validation failed: %s", e)
-            return False
