@@ -57,7 +57,7 @@ class MedicineCountCardEditor extends HTMLElement {
       .replace(/"/g, "&quot;");
   }
 
-  // 🔴 MISSING - ADD THESE TWO METHODS 🔴
+  // ✅ CRITICAL - These two methods below make the card discoverable in Home Assistant
   static getConfigElement() {
     return document.createElement("medicine-count-card-editor");
   }
