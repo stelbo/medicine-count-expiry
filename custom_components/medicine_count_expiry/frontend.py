@@ -9,7 +9,8 @@ from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
-_CARD_DIR = pathlib.Path(__file__).parent / "www" / "medicine-count-card"
+# ✅ FIXED: Point to www/medicine-count-card at root level
+_CARD_DIR = pathlib.Path(__file__).parent.parent.parent / "www" / "medicine-count-card"
 _STATIC_PATH = "/medicine_count_expiry/medicine-count-card"
 _RESOURCE_URL = f"{_STATIC_PATH}/medicine-count-card.js"
 
