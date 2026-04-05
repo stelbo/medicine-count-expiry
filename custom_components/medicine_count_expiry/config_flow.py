@@ -239,7 +239,9 @@ class MedicineCountExpiryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return False
 
     @staticmethod
-    def async_get_options_flow(config_entry: config_entries.ConfigEntry):
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
         """Return options flow."""
         from .options_flow import MedicineCountExpiryOptionsFlow
 
