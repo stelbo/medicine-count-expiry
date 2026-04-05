@@ -21,6 +21,10 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up Medicine Count & Expiry sensors from a config entry."""
+    if DOMAIN not in hass.data or "search_engine" not in hass.data[DOMAIN]:
+        _LOGGER.warning("Search engine not initialized, skipping sensor setup")
+        return
+
     search_engine = hass.data[DOMAIN]["search_engine"]
 
     entities = [
@@ -73,14 +77,18 @@ class MedicineTotalCountSensor(MedicineBaseSensor):
 
     def update(self) -> None:
         """Update sensor state."""
-        summary = self._search_engine.get_summary()
-        self._attr_native_value = summary["total"]
-        self._extra_attrs = {
-            "expired": summary["expired"],
-            "expiring_soon": summary["expiring_soon"],
-            "good": summary["good"],
-            "locations": summary["locations"],
-        }
+        if self._search_engine:
+            summary = self._search_engine.get_summary()
+            self._attr_native_value = summary["total"]
+            self._extra_attrs = {
+                "expired": summary["expired"],
+                "expiring_soon": summary["expiring_soon"],
+                "good": summary["good"],
+                "locations": summary["locations"],
+            }
+        else:
+            self._attr_native_value = 0
+            self._extra_attrs = {}
 
 
 class MedicineExpiredCountSensor(MedicineBaseSensor):
@@ -93,18 +101,22 @@ class MedicineExpiredCountSensor(MedicineBaseSensor):
 
     def update(self) -> None:
         """Update sensor state."""
-        expired = self._search_engine.get_expired()
-        self._attr_native_value = len(expired)
-        self._extra_attrs = {
-            "medicines": [
-                {
-                    "name": m.medicine_name,
-                    "expiry_date": m.expiry_date,
-                    "location": m.location,
-                }
-                for m in expired[:10]
-            ]
-        }
+        if self._search_engine:
+            expired = self._search_engine.get_expired()
+            self._attr_native_value = len(expired)
+            self._extra_attrs = {
+                "medicines": [
+                    {
+                        "name": m.medicine_name,
+                        "expiry_date": m.expiry_date,
+                        "location": m.location,
+                    }
+                    for m in expired[:10]
+                ]
+            }
+        else:
+            self._attr_native_value = 0
+            self._extra_attrs = {"medicines": []}
 
 
 class MedicineExpiringSoonCountSensor(MedicineBaseSensor):
@@ -117,18 +129,22 @@ class MedicineExpiringSoonCountSensor(MedicineBaseSensor):
 
     def update(self) -> None:
         """Update sensor state."""
-        expiring_soon = self._search_engine.get_expiring_soon()
-        self._attr_native_value = len(expiring_soon)
-        self._extra_attrs = {
-            "medicines": [
-                {
-                    "name": m.medicine_name,
-                    "expiry_date": m.expiry_date,
-                    "location": m.location,
-                    "days_until_expiry": (
-                        date.fromisoformat(m.expiry_date) - date.today()
-                    ).days,
-                }
-                for m in expiring_soon[:10]
-            ]
-        }
+        if self._search_engine:
+            expiring_soon = self._search_engine.get_expiring_soon()
+            self._attr_native_value = len(expiring_soon)
+            self._extra_attrs = {
+                "medicines": [
+                    {
+                        "name": m.medicine_name,
+                        "expiry_date": m.expiry_date,
+                        "location": m.location,
+                        "days_until_expiry": (
+                            date.fromisoformat(m.expiry_date) - date.today()
+                        ).days,
+                    }
+                    for m in expiring_soon[:10]
+                ]
+            }
+        else:
+            self._attr_native_value = 0
+            self._extra_attrs = {"medicines": []}
