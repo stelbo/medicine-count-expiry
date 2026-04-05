@@ -1,0 +1,168 @@
+add_medicine:
+  name: Add Medicine
+  description: Add a new medicine to the inventory.
+  fields:
+    medicine_name:
+      name: Medicine Name
+      description: The name of the medicine.
+      required: true
+      example: "Aspirin"
+      selector:
+        text:
+    expiry_date:
+      name: Expiry Date
+      description: The expiry date of the medicine.
+      required: true
+      example: "2025-12-31"
+      selector:
+        date:
+    description:
+      name: Description
+      description: Optional description or dosage information.
+      required: false
+      example: "500mg tablets"
+      selector:
+        text:
+    quantity:
+      name: Quantity
+      description: Number of units in stock.
+      required: false
+      default: 1
+      example: 20
+      selector:
+        number:
+          min: 1
+          max: 9999
+          mode: box
+    location:
+      name: Location
+      description: Storage location of the medicine.
+      required: false
+      default: "unknown"
+      example: "bathroom"
+      selector:
+        text:
+    image_url:
+      name: Image URL
+      description: Optional URL to an image of the medicine label.
+      required: false
+      example: "https://example.com/medicine.jpg"
+      selector:
+        text:
+
+update_medicine:
+  name: Update Medicine
+  description: Update an existing medicine record.
+  fields:
+    medicine_id:
+      name: Medicine ID
+      description: The unique ID of the medicine to update.
+      required: true
+      example: "abc123"
+      selector:
+        text:
+    medicine_name:
+      name: Medicine Name
+      description: Updated name of the medicine.
+      required: false
+      example: "Aspirin"
+      selector:
+        text:
+    expiry_date:
+      name: Expiry Date
+      description: Updated expiry date.
+      required: false
+      example: "2025-12-31"
+      selector:
+        date:
+    description:
+      name: Description
+      description: Updated description or dosage information.
+      required: false
+      example: "500mg tablets"
+      selector:
+        text:
+    quantity:
+      name: Quantity
+      description: Updated quantity in stock.
+      required: false
+      example: 20
+      selector:
+        number:
+          min: 1
+          max: 9999
+          mode: box
+    location:
+      name: Location
+      description: Updated storage location.
+      required: false
+      example: "bathroom"
+      selector:
+        text:
+    image_url:
+      name: Image URL
+      description: Updated URL to an image of the medicine label.
+      required: false
+      example: "https://example.com/medicine.jpg"
+      selector:
+        text:
+
+delete_medicine:
+  name: Delete Medicine
+  description: Delete a medicine record from the inventory.
+  fields:
+    medicine_id:
+      name: Medicine ID
+      description: The unique ID of the medicine to delete.
+      required: true
+      example: "abc123"
+      selector:
+        text:
+
+search_medicines:
+  name: Search Medicines
+  description: Search for medicines by name, location, expiry date, or status. Results are fired as a home assistant event.
+  fields:
+    name:
+      name: Name
+      description: Filter by medicine name (partial match).
+      required: false
+      example: "Aspirin"
+      selector:
+        text:
+    location:
+      name: Location
+      description: Filter by storage location.
+      required: false
+      example: "bathroom"
+      selector:
+        text:
+    expiry_before:
+      name: Expiry Before
+      description: Filter medicines expiring before this date.
+      required: false
+      example: "2025-01-01"
+      selector:
+        date:
+    expiry_after:
+      name: Expiry After
+      description: Filter medicines expiring after this date.
+      required: false
+      example: "2024-01-01"
+      selector:
+        date:
+    status:
+      name: Status
+      description: Filter by expiry status.
+      required: false
+      example: "expiring_soon"
+      selector:
+        select:
+          options:
+            - expired
+            - expiring_soon
+            - good
+
+send_digest:
+  name: Send Daily Digest
+  description: Manually trigger a daily digest notification listing expiring and expired medicines.
