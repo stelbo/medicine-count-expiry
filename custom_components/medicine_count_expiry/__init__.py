@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from typing import Final
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
 
@@ -29,9 +31,12 @@ from .storage.database import MedicineDatabase
 
 _LOGGER = logging.getLogger(__name__)
 
+CONFIG_SCHEMA: Final = {}  # No YAML configuration support
+
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up the Medicine Count & Expiry component."""
+    """Set up the Medicine Count & Expiry component from YAML (if any)."""
+    # Register frontend/card
     await async_register_frontend(hass)
     return True
 
