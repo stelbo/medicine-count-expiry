@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import logging
+from datetime import date, timedelta
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_time_interval
-from datetime import timedelta
 
 from .const import DOMAIN
 
@@ -127,8 +126,7 @@ class MedicineExpiringSoonCountSensor(MedicineBaseSensor):
                     "expiry_date": m.expiry_date,
                     "location": m.location,
                     "days_until_expiry": (
-                        __import__("datetime").date.fromisoformat(m.expiry_date)
-                        - __import__("datetime").date.today()
+                        date.fromisoformat(m.expiry_date) - date.today()
                     ).days,
                 }
                 for m in expiring_soon[:10]

@@ -3,8 +3,6 @@
  * Displays medicine inventory with expiry tracking, search, and add/delete functionality.
  */
 
-import { styles } from "./styles.js";
-
 const BASE_URL = "/api/medicine_count_expiry";
 
 class MedicineCountCard extends HTMLElement {
