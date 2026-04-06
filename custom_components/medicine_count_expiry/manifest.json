@@ -4,11 +4,10 @@
   "version": "1.0.16",
   "documentation": "https://github.com/stelbo/medicine-count-expiry",
   "issue_tracker": "https://github.com/stelbo/medicine-count-expiry/issues",
-  "requirements": ["aiohttp>=3.9.0"],
+  "requirements": ["anthropic>=0.30.0"],
   "dependencies": ["frontend"],
   "codeowners": ["@stelbo"],
-  "iot_class": "local_push",
+  "iot_class": "local_polling",
   "config_flow": true,
-  "quality_scale": "silver",
   "integration_type": "service"
 }

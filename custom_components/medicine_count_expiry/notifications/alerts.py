@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import List
+from typing import Any, List, Optional
 
 from ..const import DEFAULT_EXPIRY_WARNING_DAYS
 from ..storage.database import MedicineDatabase
@@ -28,10 +28,12 @@ class MedicineAlerts:
         self._notification_service = notification_service
         self._warning_days = warning_days
 
-    async def check_and_notify(self) -> None:
+    async def check_and_notify(self, now: Any = None) -> None:
         """Check for expiring/expired medicines and send notifications."""
-        expired = self._db.get_expired_medicines()
-        expiring_soon = self._db.get_expiring_medicines(self._warning_days)
+        expired = await self._hass.async_add_executor_job(self._db.get_expired_medicines)
+        expiring_soon = await self._hass.async_add_executor_job(
+            self._db.get_expiring_medicines, self._warning_days
+        )
 
         if expired:
             await self._send_expired_alert(expired)
@@ -62,11 +64,13 @@ class MedicineAlerts:
             message=message,
         )
 
-    async def send_daily_digest(self) -> None:
+    async def send_daily_digest(self, now: Any = None) -> None:
         """Send a daily digest of medicine status."""
-        expired = self._db.get_expired_medicines()
-        expiring_soon = self._db.get_expiring_medicines(self._warning_days)
-        all_medicines = self._db.get_all_medicines()
+        expired = await self._hass.async_add_executor_job(self._db.get_expired_medicines)
+        expiring_soon = await self._hass.async_add_executor_job(
+            self._db.get_expiring_medicines, self._warning_days
+        )
+        all_medicines = await self._hass.async_add_executor_job(self._db.get_all_medicines)
 
         lines = [
             "📋 Medicine Inventory Digest",

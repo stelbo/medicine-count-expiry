@@ -211,3 +211,20 @@ class MedicineDatabase:
             )
             rows = cursor.fetchall()
         return [self._row_to_medicine(row) for row in rows]
+
+    def delete_older_than(self, days: int) -> int:
+        """Delete medicine records added more than ``days`` days ago.
+
+        Returns the number of records removed.
+        """
+        from datetime import datetime, timedelta
+        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        with sqlite3.connect(self._db_path) as conn:
+            cursor = conn.execute(
+                "DELETE FROM medicines WHERE added_date < ?", (cutoff,)
+            )
+            conn.commit()
+            count = cursor.rowcount
+        if count:
+            _LOGGER.info("Auto-cleanup removed %d medicine record(s) older than %d days", count, days)
+        return count

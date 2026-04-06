@@ -1,0 +1,131 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "API Configuration",
+        "description": "Enter your Claude API key to enable AI-powered medicine label scanning and verification. You can get a key at [console.anthropic.com](https://console.anthropic.com). Leave blank to use the integration without AI features.",
+        "data": {
+          "claude_api_key": "Claude API Key"
+        },
+        "data_description": {
+          "claude_api_key": "Your Anthropic Claude API key (optional — enables AI label scanning and verification)"
+        }
+      },
+      "notifications": {
+        "title": "Notification Settings",
+        "description": "Configure how and when you receive medicine expiry alerts.",
+        "data": {
+          "expiry_warning_days": "Expiry Alert Threshold (days)",
+          "daily_digest": "Enable Daily Digest",
+          "digest_time": "Daily Digest Time",
+          "notification_service": "Notification Service"
+        },
+        "data_description": {
+          "expiry_warning_days": "Warn when medicines expire within this many days (1–30)",
+          "daily_digest": "Send a daily summary of expiring and expired medicines",
+          "digest_time": "Time of day to send the daily digest",
+          "notification_service": "Home Assistant notify service to use (e.g. notify.mobile_app_my_phone)"
+        }
+      },
+      "storage": {
+        "title": "Storage Settings",
+        "description": "Choose the locations where you store medicines and configure data retention.",
+        "data": {
+          "locations": "Storage Locations",
+          "auto_cleanup": "Enable Auto-Cleanup",
+          "keep_days": "Keep Data For (days)"
+        },
+        "data_description": {
+          "locations": "Select all locations where you keep medicines",
+          "auto_cleanup": "Automatically remove medicine records older than the retention period",
+          "keep_days": "Number of days to retain medicine records (30–365)"
+        }
+      },
+      "defaults": {
+        "title": "Medicine Defaults",
+        "description": "Set default values used when adding new medicines.",
+        "data": {
+          "default_location": "Default Location",
+          "default_unit": "Default Unit",
+          "enable_camera": "Enable Camera Scanning",
+          "confidence_threshold": "AI Confidence Threshold (%)"
+        },
+        "data_description": {
+          "default_location": "Default storage location pre-filled when adding a new medicine",
+          "default_unit": "Default unit of measurement pre-filled for new medicines",
+          "enable_camera": "Allow scanning medicine labels using the device camera",
+          "confidence_threshold": "Minimum AI confidence score (0–100%) required to auto-accept scan results"
+        }
+      }
+    },
+    "error": {
+      "invalid_api_key": "Invalid Claude API key. Please check your key and try again."
+    },
+    "abort": {
+      "already_configured": "Medicine Count & Expiry is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "API Configuration",
+        "description": "Update your Claude API key. Leave blank to keep the existing key or disable AI features.",
+        "data": {
+          "claude_api_key": "Claude API Key"
+        },
+        "data_description": {
+          "claude_api_key": "Your Anthropic Claude API key (leave blank to keep the current key)"
+        }
+      },
+      "notifications": {
+        "title": "Notification Settings",
+        "description": "Configure how and when you receive medicine expiry alerts.",
+        "data": {
+          "expiry_warning_days": "Expiry Alert Threshold (days)",
+          "daily_digest": "Enable Daily Digest",
+          "digest_time": "Daily Digest Time",
+          "notification_service": "Notification Service"
+        },
+        "data_description": {
+          "expiry_warning_days": "Warn when medicines expire within this many days (1–30)",
+          "daily_digest": "Send a daily summary of expiring and expired medicines",
+          "digest_time": "Time of day to send the daily digest",
+          "notification_service": "Home Assistant notify service to use (e.g. notify.mobile_app_my_phone)"
+        }
+      },
+      "storage": {
+        "title": "Storage Settings",
+        "description": "Choose the locations where you store medicines and configure data retention.",
+        "data": {
+          "locations": "Storage Locations",
+          "auto_cleanup": "Enable Auto-Cleanup",
+          "keep_days": "Keep Data For (days)"
+        },
+        "data_description": {
+          "locations": "Select all locations where you keep medicines",
+          "auto_cleanup": "Automatically remove medicine records older than the retention period",
+          "keep_days": "Number of days to retain medicine records (30–365)"
+        }
+      },
+      "defaults": {
+        "title": "Medicine Defaults",
+        "description": "Set default values used when adding new medicines.",
+        "data": {
+          "default_location": "Default Location",
+          "default_unit": "Default Unit",
+          "enable_camera": "Enable Camera Scanning",
+          "confidence_threshold": "AI Confidence Threshold (%)"
+        },
+        "data_description": {
+          "default_location": "Default storage location pre-filled when adding a new medicine",
+          "default_unit": "Default unit of measurement pre-filled for new medicines",
+          "enable_camera": "Allow scanning medicine labels using the device camera",
+          "confidence_threshold": "Minimum AI confidence score (0–100%) required to auto-accept scan results"
+        }
+      }
+    },
+    "error": {
+      "invalid_api_key": "Invalid Claude API key. Please check your key and try again."
+    }
+  }
+}

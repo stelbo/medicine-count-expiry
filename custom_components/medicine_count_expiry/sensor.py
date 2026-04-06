@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from .const import CONF_EXPIRY_WARNING_DAYS, DEFAULT_EXPIRY_WARNING_DAYS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,11 +26,15 @@ async def async_setup_entry(
         return
 
     search_engine = hass.data[DOMAIN]["search_engine"]
+    warning_days = (
+        entry.options.get(CONF_EXPIRY_WARNING_DAYS)
+        or entry.data.get(CONF_EXPIRY_WARNING_DAYS, DEFAULT_EXPIRY_WARNING_DAYS)
+    )
 
     entities = [
         MedicineTotalCountSensor(hass, search_engine),
         MedicineExpiredCountSensor(hass, search_engine),
-        MedicineExpiringSoonCountSensor(hass, search_engine),
+        MedicineExpiringSoonCountSensor(hass, search_engine, warning_days),
     ]
     async_add_entities(entities, update_before_add=True)
 
@@ -75,10 +79,10 @@ class MedicineTotalCountSensor(MedicineBaseSensor):
     _attr_icon = "mdi:pill"
     _attr_native_unit_of_measurement = "medicines"
 
-    def update(self) -> None:
+    async def async_update(self) -> None:
         """Update sensor state."""
         if self._search_engine:
-            summary = self._search_engine.get_summary()
+            summary = await self.hass.async_add_executor_job(self._search_engine.get_summary)
             self._attr_native_value = summary["total"]
             self._extra_attrs = {
                 "expired": summary["expired"],
@@ -99,10 +103,10 @@ class MedicineExpiredCountSensor(MedicineBaseSensor):
     _attr_icon = "mdi:pill-off"
     _attr_native_unit_of_measurement = "medicines"
 
-    def update(self) -> None:
+    async def async_update(self) -> None:
         """Update sensor state."""
         if self._search_engine:
-            expired = self._search_engine.get_expired()
+            expired = await self.hass.async_add_executor_job(self._search_engine.get_expired)
             self._attr_native_value = len(expired)
             self._extra_attrs = {
                 "medicines": [
@@ -127,10 +131,17 @@ class MedicineExpiringSoonCountSensor(MedicineBaseSensor):
     _attr_icon = "mdi:pill-multiple"
     _attr_native_unit_of_measurement = "medicines"
 
-    def update(self) -> None:
+    def __init__(self, hass: HomeAssistant, search_engine, warning_days: int = DEFAULT_EXPIRY_WARNING_DAYS) -> None:
+        """Initialize the expiring-soon sensor."""
+        super().__init__(hass, search_engine)
+        self._warning_days = warning_days
+
+    async def async_update(self) -> None:
         """Update sensor state."""
         if self._search_engine:
-            expiring_soon = self._search_engine.get_expiring_soon()
+            expiring_soon = await self.hass.async_add_executor_job(
+                self._search_engine.get_expiring_soon
+            )
             self._attr_native_value = len(expiring_soon)
             self._extra_attrs = {
                 "medicines": [

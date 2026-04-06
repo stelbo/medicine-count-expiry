@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+import re
+from functools import partial
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
@@ -10,6 +12,20 @@ from ..const import DOMAIN
 from ..storage.models import Medicine
 
 _LOGGER = logging.getLogger(__name__)
+
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _valid_date(value: str) -> bool:
+    """Return True if *value* is a YYYY-MM-DD formatted date string."""
+    if not _DATE_RE.match(value):
+        return False
+    try:
+        from datetime import date
+        date.fromisoformat(value)
+        return True
+    except ValueError:
+        return False
 
 
 class MedicineListView(HomeAssistantView):
@@ -29,13 +45,16 @@ class MedicineListView(HomeAssistantView):
         if ai_verified_raw is not None:
             ai_verified = ai_verified_raw.lower() == "true"
 
-        medicines = search_engine.search(
-            name=request.query.get("name"),
-            location=request.query.get("location"),
-            expiry_before=request.query.get("expiry_before"),
-            expiry_after=request.query.get("expiry_after"),
-            ai_verified=ai_verified,
-            status=request.query.get("status"),
+        medicines = await hass.async_add_executor_job(
+            partial(
+                search_engine.search,
+                name=request.query.get("name"),
+                location=request.query.get("location"),
+                expiry_before=request.query.get("expiry_before"),
+                expiry_after=request.query.get("expiry_after"),
+                ai_verified=ai_verified,
+                status=request.query.get("status"),
+            )
         )
         return web.json_response([m.to_dict() for m in medicines])
 
@@ -54,8 +73,13 @@ class MedicineListView(HomeAssistantView):
                 {"error": "medicine_name and expiry_date are required"}, status=400
             )
 
+        if not _valid_date(data["expiry_date"]):
+            return web.json_response(
+                {"error": "expiry_date must be in YYYY-MM-DD format"}, status=400
+            )
+
         medicine = Medicine.from_dict(data)
-        medicine = database.add_medicine(medicine)
+        medicine = await hass.async_add_executor_job(database.add_medicine, medicine)
         hass.bus.async_fire(
             f"{DOMAIN}_medicine_added", {"medicine_id": medicine.medicine_id}
         )
@@ -73,7 +97,7 @@ class MedicineDetailView(HomeAssistantView):
         """Handle GET request - get a specific medicine."""
         hass = request.app["hass"]
         database = hass.data[DOMAIN]["database"]
-        medicine = database.get_medicine(medicine_id)
+        medicine = await hass.async_add_executor_job(database.get_medicine, medicine_id)
         if not medicine:
             return web.json_response({"error": "Medicine not found"}, status=404)
         return web.json_response(medicine.to_dict())
@@ -83,7 +107,7 @@ class MedicineDetailView(HomeAssistantView):
         hass = request.app["hass"]
         database = hass.data[DOMAIN]["database"]
 
-        existing = database.get_medicine(medicine_id)
+        existing = await hass.async_add_executor_job(database.get_medicine, medicine_id)
         if not existing:
             return web.json_response({"error": "Medicine not found"}, status=404)
 
@@ -92,9 +116,14 @@ class MedicineDetailView(HomeAssistantView):
         except Exception:
             return web.json_response({"error": "Invalid JSON"}, status=400)
 
+        if "expiry_date" in data and not _valid_date(data["expiry_date"]):
+            return web.json_response(
+                {"error": "expiry_date must be in YYYY-MM-DD format"}, status=400
+            )
+
         merged = {**existing.to_dict(), **data, "medicine_id": medicine_id}
         updated_medicine = Medicine.from_dict(merged)
-        result = database.update_medicine(updated_medicine)
+        result = await hass.async_add_executor_job(database.update_medicine, updated_medicine)
         if not result:
             return web.json_response({"error": "Update failed"}, status=500)
 
@@ -108,7 +137,7 @@ class MedicineDetailView(HomeAssistantView):
         hass = request.app["hass"]
         database = hass.data[DOMAIN]["database"]
 
-        deleted = database.delete_medicine(medicine_id)
+        deleted = await hass.async_add_executor_job(database.delete_medicine, medicine_id)
         if not deleted:
             return web.json_response({"error": "Medicine not found"}, status=404)
 
@@ -156,5 +185,5 @@ class MedicineSummaryView(HomeAssistantView):
         """Handle GET request - get inventory summary."""
         hass = request.app["hass"]
         search_engine = hass.data[DOMAIN]["search_engine"]
-        summary = search_engine.get_summary()
+        summary = await hass.async_add_executor_job(search_engine.get_summary)
         return web.json_response(summary)
