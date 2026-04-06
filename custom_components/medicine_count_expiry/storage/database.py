@@ -26,7 +26,9 @@ CREATE TABLE IF NOT EXISTS medicines (
     added_date TEXT NOT NULL,
     updated_date TEXT NOT NULL,
     ai_leaflet TEXT DEFAULT NULL,
-    ai_leaflet_generated_at TEXT DEFAULT NULL
+    ai_leaflet_generated_at TEXT DEFAULT NULL,
+    ai_extraction_source TEXT DEFAULT NULL,
+    ai_extraction_timestamp TEXT DEFAULT NULL
 )
 """
 
@@ -40,6 +42,8 @@ CREATE_INDEX_SQL = [
 _MIGRATE_SQL = [
     "ALTER TABLE medicines ADD COLUMN ai_leaflet TEXT DEFAULT NULL",
     "ALTER TABLE medicines ADD COLUMN ai_leaflet_generated_at TEXT DEFAULT NULL",
+    "ALTER TABLE medicines ADD COLUMN ai_extraction_source TEXT DEFAULT NULL",
+    "ALTER TABLE medicines ADD COLUMN ai_extraction_timestamp TEXT DEFAULT NULL",
 ]
 
 
@@ -75,6 +79,8 @@ class MedicineDatabase:
             except (ValueError, TypeError):
                 ai_leaflet = None
         ai_leaflet_generated_at = row[12] if len(row) > 12 else None
+        ai_extraction_source = row[13] if len(row) > 13 else None
+        ai_extraction_timestamp = row[14] if len(row) > 14 else None
         return Medicine(
             medicine_id=row[0],
             medicine_name=row[1],
@@ -89,6 +95,8 @@ class MedicineDatabase:
             updated_date=row[10],
             ai_leaflet=ai_leaflet,
             ai_leaflet_generated_at=ai_leaflet_generated_at,
+            ai_extraction_source=ai_extraction_source,
+            ai_extraction_timestamp=ai_extraction_timestamp,
         )
 
     def add_medicine(self, medicine: Medicine) -> Medicine:
@@ -99,8 +107,8 @@ class MedicineDatabase:
                 """INSERT INTO medicines
                    (medicine_id, medicine_name, expiry_date, description, quantity,
                     location, image_url, ai_verified, confidence_score, added_date, updated_date,
-                    ai_leaflet, ai_leaflet_generated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    ai_leaflet, ai_leaflet_generated_at, ai_extraction_source, ai_extraction_timestamp)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     medicine.medicine_id,
                     medicine.medicine_name,
@@ -115,6 +123,8 @@ class MedicineDatabase:
                     medicine.updated_date,
                     ai_leaflet_json,
                     medicine.ai_leaflet_generated_at,
+                    medicine.ai_extraction_source,
+                    medicine.ai_extraction_timestamp,
                 ),
             )
             conn.commit()
@@ -130,7 +140,8 @@ class MedicineDatabase:
                 """UPDATE medicines SET
                    medicine_name=?, expiry_date=?, description=?, quantity=?,
                    location=?, image_url=?, ai_verified=?, confidence_score=?, updated_date=?,
-                   ai_leaflet=?, ai_leaflet_generated_at=?
+                   ai_leaflet=?, ai_leaflet_generated_at=?,
+                   ai_extraction_source=?, ai_extraction_timestamp=?
                    WHERE medicine_id=?""",
                 (
                     medicine.medicine_name,
@@ -144,6 +155,8 @@ class MedicineDatabase:
                     medicine.updated_date,
                     ai_leaflet_json,
                     medicine.ai_leaflet_generated_at,
+                    medicine.ai_extraction_source,
+                    medicine.ai_extraction_timestamp,
                     medicine.medicine_id,
                 ),
             )

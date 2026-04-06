@@ -3,7 +3,10 @@ import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from custom_components.medicine_count_expiry.ai.claude_verifier import ClaudeVerifier
+from custom_components.medicine_count_expiry.ai.claude_verifier import (
+    ClaudeVerifier,
+    _parse_claude_response,
+)
 
 
 @pytest.fixture
@@ -506,3 +509,138 @@ async def test_extract_label_info_empty_string_medicine_name_triggers_retry(veri
 
     assert call_count == 2
     assert result["medicine_name"] == "Ibuprofen 400mg"
+
+
+# ── _parse_claude_response tests ─────────────────────────────────────────────
+
+
+def test_parse_claude_response_plain_json():
+    """_parse_claude_response should handle plain JSON without code fence."""
+    data = {"medicine_name": "Aspirin", "confidence": 0.99}
+    result = _parse_claude_response(json.dumps(data))
+    assert result == data
+
+
+def test_parse_claude_response_json_code_fence():
+    """_parse_claude_response should strip ```json ... ``` code fences."""
+    data = {"medicine_name": "PARALEN 500", "description": "500 mg tablets"}
+    wrapped = f"```json\n{json.dumps(data)}\n```"
+    result = _parse_claude_response(wrapped)
+    assert result == data
+
+
+def test_parse_claude_response_bare_code_fence():
+    """_parse_claude_response should strip ``` ... ``` code fences without language tag."""
+    data = {"verified": True, "confidence_score": 0.95}
+    wrapped = f"```\n{json.dumps(data)}\n```"
+    result = _parse_claude_response(wrapped)
+    assert result == data
+
+
+def test_parse_claude_response_strips_whitespace():
+    """_parse_claude_response should handle leading/trailing whitespace."""
+    data = {"key": "value"}
+    result = _parse_claude_response(f"  \n{json.dumps(data)}\n  ")
+    assert result == data
+
+
+def test_parse_claude_response_invalid_json_raises():
+    """_parse_claude_response should raise JSONDecodeError on invalid JSON."""
+    import json as _json
+    with pytest.raises(_json.JSONDecodeError):
+        _parse_claude_response("not valid json {{")
+
+
+@pytest.mark.asyncio
+async def test_verify_medicine_markdown_wrapped_response(verifier):
+    """verify_medicine should parse Claude JSON wrapped in markdown code fence."""
+    mock_response_data = {
+        "verified": True,
+        "confidence_score": 0.99,
+        "notes": "Looks good.",
+        "normalized_expiry": "2026-04-26",
+    }
+    wrapped = f"```json\n{json.dumps(mock_response_data)}\n```"
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response(wrapped)
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.verify_medicine("PARALEN 500", "2026-04-26")
+
+    assert result["verified"] is True
+    assert result["confidence_score"] == pytest.approx(0.99)
+
+
+@pytest.mark.asyncio
+async def test_extract_label_info_markdown_wrapped_response(verifier):
+    """extract_label_info should parse Claude JSON wrapped in markdown code fence."""
+    mock_response_data = {
+        "medicine_name": "PARALEN 500",
+        "description": "500 mg tablets / paracetamol",
+        "confidence": {"medicine_name": 0.99, "description": 0.99},
+    }
+    wrapped = f"```json\n{json.dumps(mock_response_data)}\n```"
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response(wrapped)
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_label_info(b"fake_bytes")
+
+    assert result["medicine_name"] == "PARALEN 500"
+    assert result["confidence"]["medicine_name"] == pytest.approx(0.99)
+
+
+@pytest.mark.asyncio
+async def test_extract_from_image_markdown_wrapped_response(verifier):
+    """extract_from_image should parse Claude JSON wrapped in markdown code fence."""
+    mock_response_data = {
+        "medicine_name": None,
+        "expiry_date": "2028-04-30",
+        "description": None,
+        "barcode": None,
+        "confidence": {"medicine_name": 0.0, "expiry_date": 0.95, "description": 0.0},
+        "raw_expiry_text": "04 2028",
+    }
+    wrapped = f"```json\n{json.dumps(mock_response_data)}\n```"
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response(wrapped)
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_from_image(b"fake_bytes")
+
+    assert result["expiry_date"] == "2028-04-30"
+    assert result["confidence"]["expiry_date"] == pytest.approx(0.95)
+
+
+@pytest.mark.asyncio
+async def test_generate_leaflet_markdown_wrapped_response(verifier):
+    """generate_leaflet should parse Claude JSON wrapped in markdown code fence."""
+    mock_response_data = {
+        "pouzitie": "Úľava od bolesti a horúčky.",
+        "davkovanie": "500-1000 mg každých 4-6 hodín.",
+        "vedlajsie_ucinky": "Vzácne: nausea.",
+        "varovania": "Neprekonať 4000 mg denne.",
+        "skladovanie": "Chladné, suché miesto.",
+        "interakcie": None,
+    }
+    wrapped = f"```json\n{json.dumps(mock_response_data)}\n```"
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response(wrapped)
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.generate_leaflet("PARALEN 500")
+
+    assert result["pouzitie"] == "Úľava od bolesti a horúčky."
+    assert "error" not in result

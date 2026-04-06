@@ -30,6 +30,8 @@ class Medicine:
     updated_date: str = field(default_factory=lambda: datetime.now().isoformat())
     ai_leaflet: Optional[dict] = None
     ai_leaflet_generated_at: Optional[str] = None
+    ai_extraction_source: Optional[str] = None
+    ai_extraction_timestamp: Optional[str] = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -48,6 +50,8 @@ class Medicine:
             "status": self.get_status(),
             "ai_leaflet": self.ai_leaflet,
             "ai_leaflet_generated_at": self.ai_leaflet_generated_at,
+            "ai_extraction_source": self.ai_extraction_source,
+            "ai_extraction_timestamp": self.ai_extraction_timestamp,
         }
 
     def get_status(self, warning_days: Optional[int] = None) -> str:
@@ -97,4 +101,6 @@ class Medicine:
             updated_date=data.get("updated_date", datetime.now().isoformat()),
             ai_leaflet=ai_leaflet,
             ai_leaflet_generated_at=data.get("ai_leaflet_generated_at"),
+            ai_extraction_source=data.get("ai_extraction_source"),
+            ai_extraction_timestamp=data.get("ai_extraction_timestamp"),
         )

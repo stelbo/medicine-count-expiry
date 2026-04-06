@@ -19,6 +19,22 @@ def _get_anthropic():
             "anthropic package is required. Install it with: pip install anthropic"
         )
 
+
+def _parse_claude_response(response_text: str) -> dict:
+    """Parse Claude response, handling markdown code fence wrapper."""
+    response_text = response_text.strip()
+
+    # Remove markdown code fence if present (e.g. ```json ... ```)
+    if response_text.startswith("```"):
+        parts = response_text.split("```")
+        if len(parts) >= 2:
+            response_text = parts[1]
+            # Remove optional "json" language tag
+            if response_text.startswith("json"):
+                response_text = response_text[4:].lstrip()
+
+    return json.loads(response_text.strip())
+
 VERIFY_MEDICINE_PROMPT = """You are a pharmacy assistant helping verify medicine label data.
 
 Analyze the following medicine information and provide verification:
@@ -143,7 +159,7 @@ class ClaudeVerifier:
             )
             response_text = message.content[0].text.strip()
             _LOGGER.debug("Claude verify raw response: %s", response_text[:200])
-            result = json.loads(response_text)
+            result = _parse_claude_response(response_text)
             _LOGGER.debug("Claude verification result for %s: %s", medicine_name, result)
             return result
         except json.JSONDecodeError as e:
@@ -174,7 +190,7 @@ class ClaudeVerifier:
             )
             response_text = message.content[0].text.strip()
             _LOGGER.debug("Claude leaflet raw response: %s", response_text[:200])
-            result = json.loads(response_text)
+            result = _parse_claude_response(response_text)
             _LOGGER.debug("Claude leaflet result for %s: %s", medicine_name, result)
             return result
         except json.JSONDecodeError as e:
@@ -268,7 +284,7 @@ class ClaudeVerifier:
                     "confidence": {"medicine_name": 0.0, "description": 0.0},
                 }
 
-            result = json.loads(response_text)
+            result = _parse_claude_response(response_text)
 
             if not isinstance(result, dict) or not result.get("medicine_name"):
                 if _retry:
@@ -323,7 +339,7 @@ class ClaudeVerifier:
             )
             response_text = message.content[0].text.strip()
             _LOGGER.debug("Claude image raw response: %s", response_text[:200])
-            result = json.loads(response_text)
+            result = _parse_claude_response(response_text)
             _LOGGER.debug("Claude extraction result: %s", result)
             return result
         except json.JSONDecodeError as e:
