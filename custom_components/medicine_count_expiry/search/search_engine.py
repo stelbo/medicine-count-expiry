@@ -69,22 +69,29 @@ class MedicineSearchEngine:
     def get_summary(self) -> dict:
         """Get a summary of the medicine inventory."""
         all_medicines = self._db.get_all_medicines()
-        expired_count = 0
+        expired_manufacturing = 0
+        expired_opened_too_long = 0
         expiring_soon_count = 0
         good_count = 0
 
         for m in all_medicines:
             status = m.get_status(self._warning_days)
             if status == "expired":
-                expired_count += 1
+                expired_manufacturing += 1
+            elif status == "opened_too_long":
+                expired_opened_too_long += 1
             elif status == "expiring_soon":
                 expiring_soon_count += 1
             else:
                 good_count += 1
 
+        expired_total = expired_manufacturing + expired_opened_too_long
+
         return {
             "total": len(all_medicines),
-            "expired": expired_count,
+            "expired": expired_total,
+            "expired_manufacturing": expired_manufacturing,
+            "expired_opened_too_long": expired_opened_too_long,
             "expiring_soon": expiring_soon_count,
             "good": good_count,
             "locations": sorted({m.location for m in all_medicines}),
