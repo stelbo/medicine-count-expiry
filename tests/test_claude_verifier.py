@@ -862,6 +862,43 @@ async def test_generate_leaflet_retries_on_529(verifier, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_generate_leaflet_with_dosing_table(verifier):
+    """generate_leaflet should support structured table format for davkovanie."""
+    mock_response_data = {
+        "pouzitie": "Liek na zníženie horúčky a bolesť.",
+        "davkovanie": {
+            "type": "table",
+            "headers": ["Vek", "Dávka", "Max. denná dávka"],
+            "rows": [
+                ["3-6 mes", "72 mg", "360 mg"],
+                ["6-12 mes", "120 mg", "540 mg"],
+                ["1-2 roky", "144 mg", "660 mg"],
+            ],
+        },
+        "vedlajsie_ucinky": "Vzácne: nausea.",
+        "varovania": "Neprekonať maximálnu dennú dávku.",
+        "skladovanie": "Chladné, suché miesto.",
+        "interakcie": None,
+    }
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response(json.dumps(mock_response_data))
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.generate_leaflet("Paralen 200 sirup")
+
+    assert result["pouzitie"] is not None
+    assert isinstance(result["davkovanie"], dict)
+    assert result["davkovanie"]["type"] == "table"
+    assert result["davkovanie"]["headers"] == ["Vek", "Dávka", "Max. denná dávka"]
+    assert len(result["davkovanie"]["rows"]) == 3
+    assert result["davkovanie"]["rows"][0] == ["3-6 mes", "72 mg", "360 mg"]
+    assert "error" not in result
+
+
+@pytest.mark.asyncio
 async def test_verify_medicine_retries_on_529(verifier, monkeypatch):
     """verify_medicine should retry automatically on a 529 overloaded error."""
     mock_response_data = {

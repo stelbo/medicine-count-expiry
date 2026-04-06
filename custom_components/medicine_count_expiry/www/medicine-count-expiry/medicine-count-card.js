@@ -719,13 +719,15 @@ class MedicineCountCard extends HTMLElement {
 
     const rows = sections
       .filter((s) => leaflet[s.key])
-      .map(
-        (s) => `
+      .map((s) => {
+        const value = leaflet[s.key];
+        const content = this._renderLeafletValue(value);
+        return `
         <div class="leaflet-row">
           <div class="leaflet-row-header">${s.icon} ${s.label}</div>
-          <div class="leaflet-row-text">${this._escHtml(leaflet[s.key])}</div>
-        </div>`
-      )
+          <div class="leaflet-row-text">${content}</div>
+        </div>`;
+      })
       .join("");
 
     const genInfo = generatedAt
@@ -733,6 +735,20 @@ class MedicineCountCard extends HTMLElement {
       : "";
 
     return `<div class="leaflet-content">${rows}${genInfo}</div>`;
+  }
+
+  _renderLeafletValue(value) {
+    if (!value) return "";
+    // Render structured dosing table
+    if (typeof value === "object" && value.type === "table" && Array.isArray(value.headers) && Array.isArray(value.rows)) {
+      const headerCells = value.headers.map((h) => `<th>${this._escHtml(h)}</th>`).join("");
+      const bodyRows = value.rows
+        .map((row) => `<tr>${Array.isArray(row) ? row.map((cell) => `<td>${this._escHtml(cell)}</td>`).join("") : ""}</tr>`)
+        .join("");
+      return `<div class="dosing-table-wrapper"><table class="dosing-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
+    }
+    // Plain text (string or fallback)
+    return this._escHtml(String(value));
   }
 
   _getDaysInfo(expiryDate) {
@@ -806,11 +822,17 @@ class MedicineCountCard extends HTMLElement {
       });
     });
 
-    // Search
+    // Search – preserve focus and cursor position across re-render
     root.querySelector(".search-input")?.addEventListener("input", (e) => {
+      const cursorPos = e.target.selectionStart;
       this._searchTerm = e.target.value;
       this._applyFilters();
       this.render();
+      const newInput = this.shadowRoot.querySelector(".search-input");
+      if (newInput) {
+        newInput.focus();
+        newInput.setSelectionRange(cursorPos, cursorPos);
+      }
     });
 
     // Status filter
@@ -1313,6 +1335,29 @@ class MedicineCountCard extends HTMLElement {
         display: flex; align-items: center; justify-content: space-between;
         width: 100%;
       }
+
+      /* Dosing table */
+      .dosing-table-wrapper {
+        overflow-x: auto; -webkit-overflow-scrolling: touch;
+        border-radius: 6px; border: 1px solid var(--divider-color, #e0e0e0);
+        margin-top: 4px;
+      }
+      .dosing-table {
+        width: 100%; border-collapse: collapse;
+        font-size: 0.82rem; background: var(--card-background-color, #fff);
+      }
+      .dosing-table th {
+        background: var(--primary-color, #03a9f4); color: #fff;
+        padding: 7px 10px; text-align: left; white-space: nowrap;
+        font-weight: 600; font-size: 0.78rem; text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .dosing-table td {
+        padding: 6px 10px; border-bottom: 1px solid var(--divider-color, #eee);
+        color: var(--primary-text-color, #212121); white-space: nowrap;
+      }
+      .dosing-table tbody tr:last-child td { border-bottom: none; }
+      .dosing-table tbody tr:hover { background: var(--secondary-background-color, #f5f5f5); }
 
       @media (max-width: 400px) {
         .summary-grid { grid-template-columns: repeat(2, 1fr); }
