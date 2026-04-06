@@ -1,4 +1,4 @@
-# Medicine Count & Expiry
+# Medicine Count & Expiry (WIP)
 
 Track your medicine inventory and expiry dates directly in Home Assistant.
 
