@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from datetime import timedelta
+from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -35,8 +37,28 @@ from .storage.database import MedicineDatabase
 _LOGGER = logging.getLogger(__name__)
 
 
+def _copy_www_files(hass: HomeAssistant) -> None:
+    """Copy bundled www files to /config/www/ so /local/ can serve them."""
+    src = Path(__file__).parent / "www" / "medicine-count-expiry"
+    dst = Path(hass.config.path("www")) / "medicine-count-expiry"
+    try:
+        dst.mkdir(parents=True, exist_ok=True)
+        for src_file in src.iterdir():
+            dst_file = dst / src_file.name
+            shutil.copy2(src_file, dst_file)
+            _LOGGER.debug("Copied %s → %s", src_file, dst_file)
+        _LOGGER.info("Medicine Count & Expiry: www files copied to %s", dst)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning(
+            "Medicine Count & Expiry: could not copy www files (%s): %s",
+            type(err).__name__,
+            err,
+        )
+
+
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Medicine Count & Expiry component."""
+    await hass.async_add_executor_job(_copy_www_files, hass)
     register_frontend(hass)
     return True
 
