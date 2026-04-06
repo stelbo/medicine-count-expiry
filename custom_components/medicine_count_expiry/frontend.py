@@ -8,12 +8,12 @@ from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
-_RESOURCE_URL = "/local/medicine-count-card/medicine-count-card.js"
+_RESOURCE_URL = "/local/medicine-count-expiry/medicine-count-card.js"
 
 
-async def async_register_frontend(hass: HomeAssistant) -> None:
+def async_register_frontend(hass: HomeAssistant) -> None:
     """Register Lovelace card as a frontend resource."""
-    
+
     try:
         # Register the card JS file as a frontend resource
         add_extra_js_url(hass, _RESOURCE_URL)
