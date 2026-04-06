@@ -84,7 +84,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     api_key = entry.options.get(CONF_CLAUDE_API_KEY) or entry.data.get(CONF_CLAUDE_API_KEY)
     if api_key:
         from .ai.claude_verifier import ClaudeVerifier
-        hass.data[DOMAIN]["claude_verifier"] = ClaudeVerifier(api_key)
+        hass.data[DOMAIN]["claude_verifier"] = await hass.async_add_executor_job(
+            ClaudeVerifier, api_key
+        )
 
     # ── Notifications / alerts ────────────────────────────────────────────────
     notification_service = (

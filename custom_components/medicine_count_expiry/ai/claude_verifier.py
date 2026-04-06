@@ -6,12 +6,18 @@ import json
 import logging
 from typing import Any
 
-try:
-    import anthropic as _anthropic_module
-except ImportError:
-    _anthropic_module = None
-
 _LOGGER = logging.getLogger(__name__)
+
+
+def _get_anthropic():
+    """Lazily import the anthropic package to avoid blocking I/O at module load time."""
+    try:
+        import anthropic  # noqa: PLC0415
+        return anthropic
+    except ImportError:
+        raise ImportError(
+            "anthropic package is required. Install it with: pip install anthropic"
+        )
 
 VERIFY_MEDICINE_PROMPT = """You are a pharmacy assistant helping verify medicine label data.
 
@@ -108,11 +114,8 @@ class ClaudeVerifier:
         """Initialize the Claude verifier."""
         self._api_key = api_key
         self._model = model
-        if _anthropic_module is None:
-            raise ImportError(
-                "anthropic package is required. Install it with: pip install anthropic"
-            )
-        self._client = _anthropic_module.AsyncAnthropic(api_key=self._api_key)
+        anthropic = _get_anthropic()
+        self._client = anthropic.AsyncAnthropic(api_key=self._api_key)
 
     def _get_client(self):
         """Return the already-initialized async Anthropic client."""
@@ -125,6 +128,7 @@ class ClaudeVerifier:
         description: str = "",
     ) -> dict[str, Any]:
         """Verify medicine data using Claude."""
+        response_text = ""
         try:
             client = self._get_client()
             prompt = VERIFY_MEDICINE_PROMPT.format(
@@ -138,11 +142,12 @@ class ClaudeVerifier:
                 messages=[{"role": "user", "content": prompt}],
             )
             response_text = message.content[0].text.strip()
+            _LOGGER.debug("Claude verify raw response: %s", response_text[:200])
             result = json.loads(response_text)
             _LOGGER.debug("Claude verification result for %s: %s", medicine_name, result)
             return result
         except json.JSONDecodeError as e:
-            _LOGGER.error("Failed to parse Claude response: %s", e)
+            _LOGGER.error("Failed to parse Claude response: %s. Raw: %s", e, response_text[:500])
             return {
                 "verified": False,
                 "confidence_score": 0.0,
@@ -158,6 +163,7 @@ class ClaudeVerifier:
 
     async def generate_leaflet(self, medicine_name: str) -> dict[str, Any]:
         """Generate a Slovak package leaflet summary for a medicine using Claude."""
+        response_text = ""
         try:
             client = self._get_client()
             prompt = GENERATE_LEAFLET_PROMPT.format(medicine_name=medicine_name)
@@ -167,11 +173,12 @@ class ClaudeVerifier:
                 messages=[{"role": "user", "content": prompt}],
             )
             response_text = message.content[0].text.strip()
+            _LOGGER.debug("Claude leaflet raw response: %s", response_text[:200])
             result = json.loads(response_text)
             _LOGGER.debug("Claude leaflet result for %s: %s", medicine_name, result)
             return result
         except json.JSONDecodeError as e:
-            _LOGGER.error("Failed to parse Claude leaflet response: %s", e)
+            _LOGGER.error("Failed to parse Claude leaflet response: %s. Raw: %s", e, response_text[:500])
             return {
                 "pouzitie": None,
                 "davkovanie": None,
@@ -213,8 +220,14 @@ class ClaudeVerifier:
 
         return extraction
 
-    async def extract_label_info(self, image_data: bytes, media_type: str = "image/jpeg") -> dict[str, Any]:
+    async def extract_label_info(
+        self,
+        image_data: bytes,
+        media_type: str = "image/jpeg",
+        _retry: bool = True,
+    ) -> dict[str, Any]:
         """Extract only medicine name and description from a label image using Claude vision."""
+        response_text = ""
         try:
             client = self._get_client()
             image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
@@ -242,11 +255,30 @@ class ClaudeVerifier:
                 ],
             )
             response_text = message.content[0].text.strip()
+            _LOGGER.debug("Claude label raw response: %s", response_text[:200])
+
+            if not response_text:
+                _LOGGER.error("Claude returned empty response for label extraction")
+                if _retry:
+                    _LOGGER.warning("Empty response from Claude, retrying label extraction...")
+                    return await self.extract_label_info(image_data, media_type, _retry=False)
+                return {
+                    "medicine_name": None,
+                    "description": None,
+                    "confidence": {"medicine_name": 0.0, "description": 0.0},
+                }
+
             result = json.loads(response_text)
+
+            if not isinstance(result, dict) or not result.get("medicine_name"):
+                if _retry:
+                    _LOGGER.warning("Empty medicine_name from Claude, retrying label extraction...")
+                    return await self.extract_label_info(image_data, media_type, _retry=False)
+
             _LOGGER.debug("Claude label extraction result: %s", result)
             return result
         except json.JSONDecodeError as e:
-            _LOGGER.error("Failed to parse Claude label response: %s", e)
+            _LOGGER.error("Failed to parse Claude label response: %s. Raw: %s", e, response_text[:500])
             return {
                 "medicine_name": None,
                 "description": None,
@@ -262,6 +294,7 @@ class ClaudeVerifier:
 
     async def extract_from_image(self, image_data: bytes, media_type: str = "image/jpeg") -> dict[str, Any]:
         """Extract medicine information from an image using Claude vision."""
+        response_text = ""
         try:
             client = self._get_client()
             image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
@@ -289,11 +322,12 @@ class ClaudeVerifier:
                 ],
             )
             response_text = message.content[0].text.strip()
+            _LOGGER.debug("Claude image raw response: %s", response_text[:200])
             result = json.loads(response_text)
             _LOGGER.debug("Claude extraction result: %s", result)
             return result
         except json.JSONDecodeError as e:
-            _LOGGER.error("Failed to parse Claude image response: %s", e)
+            _LOGGER.error("Failed to parse Claude image response: %s. Raw: %s", e, response_text[:500])
             return {
                 "medicine_name": None,
                 "expiry_date": None,
