@@ -278,6 +278,26 @@ class MedicineCountCard extends HTMLElement {
     }
   }
 
+  _computeOverallConfidence() {
+    const lc = this._formData.labelConfidence || {};
+    const ec = this._formData.expiryConfidence || {};
+    const nameConf = lc.medicine_name || 0.0;
+    const descConf = lc.description || 0.0;
+    const expiryConf = ec.expiry_date || 0.0;
+    // Weighted average: name 40%, description 30%, expiry 30%
+    return nameConf * 0.4 + descConf * 0.3 + expiryConf * 0.3;
+  }
+
+  _getConfidenceBadge(score) {
+    if (score === null || score === undefined || isNaN(score)) return "";
+    const pct = Math.round(score * 100);
+    const cls = score >= 0.95 ? "conf-excellent"
+      : score >= 0.85 ? "conf-good"
+      : score >= 0.75 ? "conf-fair"
+      : "conf-low-badge";
+    return `<span class="confidence-badge ${cls}" title="AI confidence: ${pct}%">${pct}%</span>`;
+  }
+
   // ── Rendering ─────────────────────────────────────────────────────────────
 
   render() {
@@ -584,13 +604,14 @@ class MedicineCountCard extends HTMLElement {
       : "Good";
     const daysInfo = this._getDaysInfo(m.expiry_date);
     const hasLeaflet = m.ai_leaflet ? ' title="Leaflet available – click for details"' : "";
+    const confidenceBadge = m.confidence_score != null ? this._getConfidenceBadge(m.confidence_score) : "";
 
     return `
       <div class="medicine-item ${statusClass} clickable-item" data-id="${this._escHtml(m.medicine_id)}"${hasLeaflet}>
         <div class="medicine-status-bar"></div>
         <div class="medicine-body">
           <div class="medicine-main">
-            <div class="medicine-name">${this._escHtml(m.medicine_name)}</div>
+            <div class="medicine-name">${this._escHtml(m.medicine_name)}${confidenceBadge}</div>
             <div class="medicine-meta">
               ${m.description ? `<span class="meta-chip">${this._escHtml(m.description)}</span>` : ""}
               <span class="meta-chip">📍 ${this._escHtml(m.location || "unknown")}</span>
@@ -654,9 +675,14 @@ class MedicineCountCard extends HTMLElement {
                 <span class="detail-label">Description</span>
                 <span class="detail-value">${this._escHtml(m.description)}</span>
               </div>` : ""}
-              ${m.ai_verified ? `<div class="detail-field detail-field-wide">
-                <span class="detail-label">AI Verification</span>
-                <span class="detail-value">🤖 Verified (${Math.round((m.confidence_score || 0) * 100)}% confidence)</span>
+              ${m.ai_verified || m.confidence_score > 0 || m.ai_extraction_source ? `<div class="detail-field detail-field-wide">
+                <span class="detail-label">AI Extraction Info</span>
+                <div class="ai-info-section">
+                  ${m.confidence_score > 0 ? `<div class="ai-info-row">🎯 Confidence: ${this._getConfidenceBadge(m.confidence_score)}</div>` : ""}
+                  ${m.ai_extraction_source ? `<div class="ai-info-row">📡 Source: <strong>${this._escHtml(m.ai_extraction_source === "scanned_label" ? "Scanned Label" : m.ai_extraction_source === "manual" ? "Manual Entry" : m.ai_extraction_source)}</strong></div>` : ""}
+                  ${m.ai_extraction_timestamp ? `<div class="ai-info-row">🕐 Extracted: ${this._escHtml(m.ai_extraction_timestamp.substring(0, 19).replace("T", " "))}</div>` : ""}
+                  ${m.ai_verified ? `<div class="ai-info-row">🤖 AI Verified: ✅</div>` : ""}
+                </div>
               </div>` : ""}
             </div>
 
@@ -918,7 +944,9 @@ class MedicineCountCard extends HTMLElement {
         location: getValue("location") || "unknown",
         unit: getValue("unit") || "",
         ai_verified: !!(this._formData.labelConfidence && this._formData.labelConfidence.medicine_name),
-        confidence_score: (this._formData.labelConfidence || {}).medicine_name || 0.0,
+        confidence_score: this._computeOverallConfidence(),
+        ai_extraction_source: (this._formData.labelConfidence || this._formData.expiryConfidence) ? "scanned_label" : "manual",
+        ai_extraction_timestamp: new Date().toISOString(),
       });
     });
   }
@@ -1153,6 +1181,26 @@ class MedicineCountCard extends HTMLElement {
       /* Clickable medicine item */
       .clickable-item { cursor: pointer; }
       .clickable-item:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.14); }
+
+      /* Confidence badge */
+      .confidence-badge {
+        display: inline-block; font-size: 0.65rem; padding: 2px 6px;
+        border-radius: 10px; margin-left: 6px; font-weight: 600;
+        vertical-align: middle;
+      }
+      .conf-excellent { background: #e8f5e9; color: #2e7d32; }
+      .conf-good { background: #e3f2fd; color: #1565c0; }
+      .conf-fair { background: #fff3e0; color: #e65100; }
+      .conf-low-badge { background: #ffebee; color: #c62828; }
+
+      /* AI info section in detail panel */
+      .ai-info-section {
+        display: flex; flex-direction: column; gap: 4px;
+        padding: 8px 10px; border-radius: 6px;
+        background: var(--secondary-background-color, #f5f5f5);
+        font-size: 0.85rem;
+      }
+      .ai-info-row { color: var(--primary-text-color, #212121); }
 
       /* Leaflet chip */
       .leaflet-chip { background: #e8eaf6; color: #3949ab; }
