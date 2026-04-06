@@ -12,6 +12,8 @@ def register_api_views(hass) -> None:
         MedicineDetailView,
         MedicineLeafletView,
         MedicineListView,
+        MedicineScanExpiryView,
+        MedicineScanLabelView,
         MedicineScanView,
         MedicineSummaryView,
     )
@@ -19,6 +21,8 @@ def register_api_views(hass) -> None:
     hass.http.register_view(MedicineListView())
     hass.http.register_view(MedicineDetailView())
     hass.http.register_view(MedicineLeafletView())
+    hass.http.register_view(MedicineScanLabelView())
+    hass.http.register_view(MedicineScanExpiryView())
     hass.http.register_view(MedicineScanView())
     hass.http.register_view(MedicineSummaryView())
     _LOGGER.info("Medicine Count & Expiry API views registered")

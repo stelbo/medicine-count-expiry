@@ -51,6 +51,25 @@ Odpovedz VÝLUČNE vo formáte JSON s nasledujúcou štruktúrou (všetky hodnot
 
 Odpovedz IBA s JSON objektom, bez ďalšieho textu."""
 
+EXTRACT_LABEL_PROMPT = """You are a pharmacy assistant. Analyze this medicine label image and extract the medicine name and description ONLY.
+
+Do NOT extract the expiry date or any date information.
+
+Please respond with a JSON object containing:
+{
+    "medicine_name": "extracted product name or null",
+    "description": "dosage form and strength or null",
+    "confidence": {
+        "medicine_name": 0.0-1.0,
+        "description": 0.0-1.0
+    }
+}
+
+The medicine_name should be the product name as printed on the label (e.g. "Aspirin Plus", "Paracetamol 500mg").
+The description should be the dosage form or strength (e.g. "500mg tablets", "200mg capsules", "10ml oral solution").
+
+Respond ONLY with the JSON object, no other text."""
+
 EXTRACT_FROM_IMAGE_PROMPT = """You are a pharmacy assistant. Analyze this medicine label image and extract information.
 
 Please respond with a JSON object containing:
@@ -192,6 +211,53 @@ class ClaudeVerifier:
             extraction["overall_confidence"] = verification.get("confidence_score", 0.0)
 
         return extraction
+
+    async def extract_label_info(self, image_data: bytes, media_type: str = "image/jpeg") -> dict[str, Any]:
+        """Extract only medicine name and description from a label image using Claude vision."""
+        try:
+            client = self._get_client()
+            image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
+            message = await client.messages.create(
+                model=self._model,
+                max_tokens=512,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": media_type,
+                                    "data": image_b64,
+                                },
+                            },
+                            {
+                                "type": "text",
+                                "text": EXTRACT_LABEL_PROMPT,
+                            },
+                        ],
+                    }
+                ],
+            )
+            response_text = message.content[0].text.strip()
+            result = json.loads(response_text)
+            _LOGGER.debug("Claude label extraction result: %s", result)
+            return result
+        except json.JSONDecodeError as e:
+            _LOGGER.error("Failed to parse Claude label response: %s", e)
+            return {
+                "medicine_name": None,
+                "description": None,
+                "confidence": {"medicine_name": 0.0, "description": 0.0},
+            }
+        except Exception as e:
+            _LOGGER.error("Claude label extraction error: %s", e)
+            return {
+                "medicine_name": None,
+                "description": None,
+                "confidence": {"medicine_name": 0.0, "description": 0.0},
+            }
 
     async def extract_from_image(self, image_data: bytes, media_type: str = "image/jpeg") -> dict[str, Any]:
         """Extract medicine information from an image using Claude vision."""

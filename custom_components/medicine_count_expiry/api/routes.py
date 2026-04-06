@@ -200,6 +200,68 @@ class MedicineLeafletView(HomeAssistantView):
             return web.json_response({"error": str(e)}, status=500)
 
 
+class MedicineScanLabelView(HomeAssistantView):
+    """View to scan a medicine label image and extract name + description only."""
+
+    url = "/api/medicine_count_expiry/scan/label"
+    name = "api:medicine_count_expiry:scan_label"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Handle POST request - extract name and description from label image."""
+        hass = request.app["hass"]
+        claude_verifier = hass.data[DOMAIN].get("claude_verifier")
+
+        if not claude_verifier:
+            return web.json_response(
+                {"error": "Claude AI is not configured"}, status=503
+            )
+
+        try:
+            data = await request.read()
+            content_type = request.content_type or "image/jpeg"
+            result = await claude_verifier.extract_label_info(data, content_type)
+            return web.json_response(result)
+        except Exception as e:
+            _LOGGER.error("Label scan error: %s", e)
+            return web.json_response({"error": str(e)}, status=500)
+
+
+class MedicineScanExpiryView(HomeAssistantView):
+    """View to scan an expiry date from a medicine image."""
+
+    url = "/api/medicine_count_expiry/scan/expiry"
+    name = "api:medicine_count_expiry:scan_expiry"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Handle POST request - extract expiry date from image."""
+        hass = request.app["hass"]
+        claude_verifier = hass.data[DOMAIN].get("claude_verifier")
+
+        if not claude_verifier:
+            return web.json_response(
+                {"error": "Claude AI is not configured"}, status=503
+            )
+
+        try:
+            data = await request.read()
+            content_type = request.content_type or "image/jpeg"
+            result = await claude_verifier.extract_from_image(data, content_type)
+            return web.json_response(
+                {
+                    "expiry_date": result.get("expiry_date"),
+                    "raw_expiry_text": result.get("raw_expiry_text"),
+                    "confidence": {
+                        "expiry_date": (result.get("confidence") or {}).get("expiry_date", 0.0),
+                    },
+                }
+            )
+        except Exception as e:
+            _LOGGER.error("Expiry scan error: %s", e)
+            return web.json_response({"error": str(e)}, status=500)
+
+
 class MedicineScanView(HomeAssistantView):
     """View to scan a medicine image with Claude AI."""
 
