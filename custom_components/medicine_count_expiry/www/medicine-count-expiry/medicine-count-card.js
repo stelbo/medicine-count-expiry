@@ -174,6 +174,14 @@ class MedicineCountCard extends HTMLElement {
       }
     }
     merged.confidence = mergedConf;
+    // Keep verification data from whichever scan has higher overall confidence
+    const prevOverall = prev.overall_confidence || 0;
+    const nextOverall = next.overall_confidence || 0;
+    if (nextOverall >= prevOverall && next.verification) {
+      merged.verification = next.verification;
+      merged.verified = next.verified;
+      merged.overall_confidence = nextOverall;
+    }
     return merged;
   }
 
@@ -317,13 +325,19 @@ class MedicineCountCard extends HTMLElement {
   }
 
   _renderScanNotice(hasScanned, scanResult) {
-    if (hasScanned) {
-      return `<div class="scan-notice">✅ Pre-filled from scan result (scan #${this._scanCount})</div>`;
-    }
-    if (scanResult.medicine_name || scanResult.expiry_date) {
-      return '<div class="scan-notice">✅ Pre-filled from scan result</div>';
-    }
-    return "";
+    if (!hasScanned && !scanResult.medicine_name && !scanResult.expiry_date) return "";
+    const confidence = scanResult.overall_confidence || 0;
+    const isLowConfidence = scanResult.verification && confidence < 0.7;
+    const confidenceHtml = scanResult.verification
+      ? `<div class="confidence-display">
+           Confidence: ${Math.round(confidence * 100)}%
+           ${isLowConfidence ? '<span class="confidence-warning">⚠️ Low confidence – please verify</span>' : ""}
+         </div>`
+      : "";
+    const label = hasScanned
+      ? `✅ Pre-filled from scan result (scan #${this._scanCount})`
+      : "✅ Pre-filled from scan result";
+    return `<div class="scan-notice">${label}${confidenceHtml}</div>`;
   }
 
   _renderSummary() {
@@ -572,11 +586,13 @@ class MedicineCountCard extends HTMLElement {
       this._scanCount = 0;
       this.render();
     });
-    root.querySelector(".cancel-add")?.addEventListener("click", () => {
-      this._showAddForm = false;
-      this._scanResult = null;
-      this._scanCount = 0;
-      this.render();
+    root.querySelectorAll(".cancel-add").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this._showAddForm = false;
+        this._scanResult = null;
+        this._scanCount = 0;
+        this.render();
+      });
     });
 
     root.querySelector(".dismiss-error")?.addEventListener("click", () => {
@@ -823,6 +839,8 @@ class MedicineCountCard extends HTMLElement {
         background: #e8f5e9; color: #2e7d32;
         padding: 6px 10px; border-radius: 4px; font-size: 0.8rem; margin-bottom: 10px;
       }
+      .confidence-display { margin-top: 4px; font-size: 0.78rem; }
+      .confidence-warning { margin-left: 8px; color: #e65100; font-weight: 600; }
       .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px; }
       .form-grid label, .form-label { display: flex; flex-direction: column; font-size: 0.85rem; color: var(--secondary-text-color, #555); gap: 5px; }
       .form-input {

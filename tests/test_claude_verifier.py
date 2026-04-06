@@ -218,3 +218,111 @@ async def test_generate_leaflet_api_error(verifier):
 
     assert "error" in result
     assert result["pouzitie"] is None
+
+
+@pytest.mark.asyncio
+async def test_extract_and_verify_success(verifier):
+    """extract_and_verify should return extraction merged with verification data."""
+    extraction_data = {
+        "medicine_name": "Aspirin 100mg",
+        "expiry_date": "2026-03-31",
+        "description": "100mg tablets",
+        "barcode": None,
+        "confidence": {"medicine_name": 0.9, "expiry_date": 0.85, "description": 0.8},
+        "raw_expiry_text": "EXP 03/2026",
+    }
+    verification_data = {
+        "verified": True,
+        "medicine_name_valid": True,
+        "expiry_date_valid": True,
+        "description_valid": True,
+        "confidence_score": 0.92,
+        "notes": "All looks valid.",
+        "normalized_expiry": "2026-03-31",
+    }
+
+    call_count = 0
+
+    async def mock_create(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        # First call is extraction (image content), second is verification (text only)
+        if call_count == 1:
+            return _mock_anthropic_response(json.dumps(extraction_data))
+        return _mock_anthropic_response(json.dumps(verification_data))
+
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = mock_create
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_and_verify(b"fake_image_bytes", "image/jpeg")
+
+    assert result["medicine_name"] == "Aspirin 100mg"
+    assert result["expiry_date"] == "2026-03-31"
+    assert result["description"] == "100mg tablets"
+    assert result["confidence"]["medicine_name"] == pytest.approx(0.9)
+    assert result["confidence"]["expiry_date"] == pytest.approx(0.85)
+    assert result["verified"] is True
+    assert result["overall_confidence"] == pytest.approx(0.92)
+    assert result["verification"]["confidence_score"] == pytest.approx(0.92)
+
+
+@pytest.mark.asyncio
+async def test_extract_and_verify_no_medicine_name(verifier):
+    """extract_and_verify should skip verification when no medicine name is extracted."""
+    extraction_data = {
+        "medicine_name": None,
+        "expiry_date": None,
+        "description": None,
+        "confidence": {"medicine_name": 0.0, "expiry_date": 0.0, "description": 0.0},
+    }
+
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response(json.dumps(extraction_data))
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_and_verify(b"fake_image_bytes", "image/jpeg")
+
+    assert result["medicine_name"] is None
+    assert "verification" not in result
+    assert "overall_confidence" not in result
+    # Only one API call made (no verification step)
+    assert mock_client.messages.create.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_extract_and_verify_verification_fails_gracefully(verifier):
+    """extract_and_verify should still return extraction when verification errors."""
+    extraction_data = {
+        "medicine_name": "Ibuprofen 200mg",
+        "expiry_date": "2027-01-31",
+        "description": "Anti-inflammatory",
+        "confidence": {"medicine_name": 0.88, "expiry_date": 0.75, "description": 0.7},
+    }
+
+    call_count = 0
+
+    async def mock_create(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return _mock_anthropic_response(json.dumps(extraction_data))
+        raise RuntimeError("API quota exceeded")
+
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = mock_create
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_and_verify(b"fake_image_bytes", "image/jpeg")
+
+    # Extraction data is still returned
+    assert result["medicine_name"] == "Ibuprofen 200mg"
+    assert result["expiry_date"] == "2027-01-31"
+    # Verification failed gracefully – verified flag is False and confidence_score is 0
+    assert result["verified"] is False
+    assert result["overall_confidence"] == pytest.approx(0.0)

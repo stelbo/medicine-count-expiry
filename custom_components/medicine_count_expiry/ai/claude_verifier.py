@@ -173,6 +173,26 @@ class ClaudeVerifier:
                 "error": f"Leaflet generation error: {e}",
             }
 
+    async def extract_and_verify(self, image_data: bytes, media_type: str = "image/jpeg") -> dict[str, Any]:
+        """Extract medicine info from an image AND verify the extracted data."""
+        extraction = await self.extract_from_image(image_data, media_type)
+
+        if extraction.get("medicine_name"):
+            try:
+                verification = await self.verify_medicine(
+                    medicine_name=extraction["medicine_name"],
+                    expiry_date=extraction.get("expiry_date") or "",
+                    description=extraction.get("description") or "",
+                )
+            except Exception as e:
+                _LOGGER.error("Verification step failed during extract_and_verify: %s", e)
+                verification = {"verified": False, "confidence_score": 0.0, "notes": f"Verification error: {e}"}
+            extraction["verification"] = verification
+            extraction["verified"] = verification.get("verified", False)
+            extraction["overall_confidence"] = verification.get("confidence_score", 0.0)
+
+        return extraction
+
     async def extract_from_image(self, image_data: bytes, media_type: str = "image/jpeg") -> dict[str, Any]:
         """Extract medicine information from an image using Claude vision."""
         try:
