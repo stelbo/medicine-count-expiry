@@ -717,10 +717,19 @@ class MedicineCountCard extends HTMLElement {
 
 customElements.define("medicine-count-card", MedicineCountCard);
 
-window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "medicine-count-card",
-  name: "Medicine Count & Expiry",
-  description: "Track your medicine inventory and expiry dates",
-  preview: true,
-});
+// Register card AFTER page loads to ensure Home Assistant is ready
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", registerCard);
+} else {
+  registerCard();
+}
+
+function registerCard() {
+  window.customCards = window.customCards || [];
+  window.customCards.push({
+    type: "medicine-count-card",
+    name: "Medicine Count & Expiry",
+    description: "Track your medicine inventory and expiry dates",
+    preview: true,
+  });
+}
