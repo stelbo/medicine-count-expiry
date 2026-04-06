@@ -166,3 +166,17 @@ search_medicines:
 send_digest:
   name: Send Daily Digest
   description: Manually trigger a daily digest notification listing expiring and expired medicines.
+
+scan_image:
+  name: Scan Medicine Image
+  description: >
+    Fetch an image from a URL and extract medicine information using Claude AI.
+    Results are fired as a home_assistant event named medicine_count_expiry_scan_result.
+  fields:
+    image_url:
+      name: Image URL
+      description: A publicly accessible URL to the medicine label image.
+      required: true
+      example: "https://example.com/medicine-label.jpg"
+      selector:
+        text:

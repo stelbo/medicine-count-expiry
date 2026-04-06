@@ -334,7 +334,7 @@ class MedicineCountCard extends HTMLElement {
     const daysInfo = this._getDaysInfo(m.expiry_date);
 
     return `
-      <div class="medicine-item ${statusClass}" data-id="${m.medicine_id}">
+      <div class="medicine-item ${statusClass}" data-id="${this._escHtml(m.medicine_id)}">
         <div class="medicine-status-bar"></div>
         <div class="medicine-body">
           <div class="medicine-main">
@@ -351,7 +351,7 @@ class MedicineCountCard extends HTMLElement {
             <div class="expiry-days ${statusClass}">${daysInfo}</div>
             <span class="status-badge ${statusClass}">${statusLabel}</span>
           </div>
-          <button class="delete-btn icon-btn" data-id="${m.medicine_id}" data-name="${this._escHtml(m.medicine_name)}" title="Delete">🗑</button>
+          <button class="delete-btn icon-btn" data-id="${this._escHtml(m.medicine_id)}" data-name="${this._escHtml(m.medicine_name)}" title="Delete">🗑</button>
         </div>
       </div>
     `;

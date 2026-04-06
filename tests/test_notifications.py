@@ -12,6 +12,8 @@ def mock_hass():
     """Create a minimal mock Home Assistant instance."""
     hass = MagicMock()
     hass.services.async_call = AsyncMock()
+    # async_add_executor_job must be awaitable and must actually call the function
+    hass.async_add_executor_job = AsyncMock(side_effect=lambda func, *args: func(*args))
     return hass
 
 

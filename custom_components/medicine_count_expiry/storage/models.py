@@ -45,8 +45,12 @@ class Medicine:
             "status": self.get_status(),
         }
 
-    def get_status(self) -> str:
-        """Get the expiry status of this medicine."""
+    def get_status(self, warning_days: int = 30) -> str:
+        """Get the expiry status of this medicine.
+
+        Args:
+            warning_days: Number of days ahead of expiry to consider "expiring soon".
+        """
         from ..const import STATUS_EXPIRED, STATUS_EXPIRING_SOON, STATUS_GOOD, STATUS_UNKNOWN
         try:
             expiry = date.fromisoformat(self.expiry_date)
@@ -54,7 +58,7 @@ class Medicine:
             delta = (expiry - today).days
             if delta < 0:
                 return STATUS_EXPIRED
-            elif delta <= 30:
+            elif delta <= warning_days:
                 return STATUS_EXPIRING_SOON
             else:
                 return STATUS_GOOD
