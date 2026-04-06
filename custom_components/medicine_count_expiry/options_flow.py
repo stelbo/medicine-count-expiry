@@ -62,7 +62,7 @@ class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        self._config_entry = config_entry
         self._data: dict[str, Any] = {}
 
     async def async_step_init(
@@ -79,7 +79,7 @@ class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Optional(
                         CONF_CLAUDE_API_KEY,
-                        default=_get(self.config_entry, CONF_CLAUDE_API_KEY, ""),
+                        default=_get(self._config_entry, CONF_CLAUDE_API_KEY, ""),
                     ): TextSelector(
                         TextSelectorConfig(type=TextSelectorType.PASSWORD)
                     ),
@@ -102,7 +102,7 @@ class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_EXPIRY_WARNING_DAYS,
                         default=_get(
-                            self.config_entry,
+                            self._config_entry,
                             CONF_EXPIRY_WARNING_DAYS,
                             DEFAULT_EXPIRY_WARNING_DAYS,
                         ),
@@ -114,18 +114,18 @@ class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_DAILY_DIGEST,
                         default=_get(
-                            self.config_entry, CONF_DAILY_DIGEST, DEFAULT_DAILY_DIGEST
+                            self._config_entry, CONF_DAILY_DIGEST, DEFAULT_DAILY_DIGEST
                         ),
                     ): BooleanSelector(),
                     vol.Optional(
                         CONF_DIGEST_TIME,
                         default=_get(
-                            self.config_entry, CONF_DIGEST_TIME, DEFAULT_DIGEST_TIME
+                            self._config_entry, CONF_DIGEST_TIME, DEFAULT_DIGEST_TIME
                         ),
                     ): TimeSelector(TimeSelectorConfig()),
                     vol.Optional(
                         CONF_NOTIFICATION_SERVICE,
-                        default=_get(self.config_entry, CONF_NOTIFICATION_SERVICE, ""),
+                        default=_get(self._config_entry, CONF_NOTIFICATION_SERVICE, ""),
                     ): TextSelector(TextSelectorConfig(type=TextSelectorType.TEXT)),
                 }
             ),
@@ -146,7 +146,7 @@ class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_LOCATIONS,
                         default=_get(
-                            self.config_entry, CONF_LOCATIONS, DEFAULT_LOCATIONS
+                            self._config_entry, CONF_LOCATIONS, DEFAULT_LOCATIONS
                         ),
                     ): SelectSelector(
                         SelectSelectorConfig(
@@ -158,13 +158,13 @@ class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_AUTO_CLEANUP,
                         default=_get(
-                            self.config_entry, CONF_AUTO_CLEANUP, DEFAULT_AUTO_CLEANUP
+                            self._config_entry, CONF_AUTO_CLEANUP, DEFAULT_AUTO_CLEANUP
                         ),
                     ): BooleanSelector(),
                     vol.Optional(
                         CONF_KEEP_DAYS,
                         default=_get(
-                            self.config_entry, CONF_KEEP_DAYS, DEFAULT_KEEP_DAYS
+                            self._config_entry, CONF_KEEP_DAYS, DEFAULT_KEEP_DAYS
                         ),
                     ): NumberSelector(
                         NumberSelectorConfig(
@@ -190,7 +190,7 @@ class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_DEFAULT_LOCATION,
                         default=_get(
-                            self.config_entry,
+                            self._config_entry,
                             CONF_DEFAULT_LOCATION,
                             DEFAULT_DEFAULT_LOCATION,
                         ),
@@ -203,7 +203,7 @@ class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_DEFAULT_UNIT,
                         default=_get(
-                            self.config_entry, CONF_DEFAULT_UNIT, DEFAULT_DEFAULT_UNIT
+                            self._config_entry, CONF_DEFAULT_UNIT, DEFAULT_DEFAULT_UNIT
                         ),
                     ): SelectSelector(
                         SelectSelectorConfig(
@@ -214,7 +214,7 @@ class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_ENABLE_CAMERA,
                         default=_get(
-                            self.config_entry,
+                            self._config_entry,
                             CONF_ENABLE_CAMERA,
                             DEFAULT_ENABLE_CAMERA,
                         ),
@@ -222,7 +222,7 @@ class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_CONFIDENCE_THRESHOLD,
                         default=_get(
-                            self.config_entry,
+                            self._config_entry,
                             CONF_CONFIDENCE_THRESHOLD,
                             DEFAULT_CONFIDENCE_THRESHOLD,
                         ),

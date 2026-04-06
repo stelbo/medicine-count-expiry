@@ -157,7 +157,7 @@ class MedicineCountCard extends HTMLElement {
       <style>${this._getStyles()}</style>
       <ha-card>
         <div class="card-header">
-          <span class="card-title">💊 Medicine Inventory</span>
+          <span class="card-title">${this._config.title || "💊 Medicine Inventory"}</span>
           <div class="header-actions">
             <button class="icon-btn refresh-btn" title="Refresh">⟳</button>
             <button class="icon-btn add-btn" title="Add Medicine">＋</button>
@@ -711,7 +711,7 @@ class MedicineCountCard extends HTMLElement {
   }
 
   static getStubConfig() {
-    return {};
+    return { type: "medicine-count-card" };
   }
 }
 
