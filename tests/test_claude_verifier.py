@@ -9,7 +9,7 @@ from custom_components.medicine_count_expiry.ai.claude_verifier import ClaudeVer
 @pytest.fixture
 def verifier():
     """Return a ClaudeVerifier with a fake API key."""
-    return ClaudeVerifier(api_key="test-key-123", model="claude-3-5-sonnet-20241022")
+    return ClaudeVerifier(api_key="test-key-123", model="claude-sonnet-4-6")
 
 
 def _mock_anthropic_response(text: str):
