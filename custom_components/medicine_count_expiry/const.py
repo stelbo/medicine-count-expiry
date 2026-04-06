@@ -24,7 +24,7 @@ LOCATION_PRESETS = ["bathroom", "kitchen", "bedroom", "living room", "other"]
 UNIT_PRESETS = ["tablets", "pills", "ml", "mg", "capsules", "drops", "units"]
 
 # Defaults
-DEFAULT_EXPIRY_WARNING_DAYS = 7
+DEFAULT_EXPIRY_WARNING_DAYS = 30
 DEFAULT_LOCATIONS = ["bathroom", "kitchen", "bedroom", "living room"]
 DEFAULT_DAILY_DIGEST = False
 DEFAULT_DIGEST_TIME = "08:00:00"

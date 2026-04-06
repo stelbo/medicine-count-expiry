@@ -104,6 +104,51 @@ def test_get_summary(db, search_engine, sample_medicine, expired_medicine, expir
     assert set(summary["locations"]) == {"bathroom", "first_aid_kit", "kitchen"}
 
 
+def test_summary_expiring_soon_matches_individual_status(db):
+    """Summary expiring_soon count must agree with individual get_status() using the same threshold.
+
+    Regression test: with DEFAULT_EXPIRY_WARNING_DAYS=30, a medicine expiring in 20 days
+    should appear in both individual status and summary as 'expiring_soon', not 'good'.
+    """
+    from datetime import date, timedelta
+    from custom_components.medicine_count_expiry.search.search_engine import MedicineSearchEngine
+
+    soon = (date.today() + timedelta(days=20)).isoformat()
+    m = Medicine(medicine_name="Paralen 500", expiry_date=soon)
+    db.add_medicine(m)
+
+    engine = MedicineSearchEngine(db, warning_days=30)
+    summary = engine.get_summary()
+
+    # Individual status must match the summary bucket
+    assert m.get_status(30) == "expiring_soon"
+    assert summary["expiring_soon"] == 1
+    assert summary["good"] == 0
+
+
+def test_summary_uses_configured_warning_days(db):
+    """get_summary() must use the search engine's configured warning_days, not a hardcoded value."""
+    from datetime import date, timedelta
+    from custom_components.medicine_count_expiry.search.search_engine import MedicineSearchEngine
+
+    # Medicine expiring in 20 days
+    soon = (date.today() + timedelta(days=20)).isoformat()
+    m = Medicine(medicine_name="Ibuprofen 400mg", expiry_date=soon)
+    db.add_medicine(m)
+
+    # With 30-day threshold: should be expiring_soon
+    engine_30 = MedicineSearchEngine(db, warning_days=30)
+    summary_30 = engine_30.get_summary()
+    assert summary_30["expiring_soon"] == 1
+    assert summary_30["good"] == 0
+
+    # With 10-day threshold: should be good (20 days > 10)
+    engine_10 = MedicineSearchEngine(db, warning_days=10)
+    summary_10 = engine_10.get_summary()
+    assert summary_10["expiring_soon"] == 0
+    assert summary_10["good"] == 1
+
+
 def test_search_combined_filters(db, search_engine):
     """search() with multiple filters should apply all criteria."""
     m1 = Medicine(medicine_name="Aspirin", expiry_date="2099-01-01", location="bathroom")
