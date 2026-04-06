@@ -138,12 +138,18 @@ Názov lieku: {medicine_name}
 Odpovedz VÝLUČNE vo formáte JSON s nasledujúcou štruktúrou (všetky hodnoty musia byť v slovenčine):
 {{
     "pouzitie": "Krátky popis použitia lieku (1-2 vety)",
-    "davkovanie": "Bežné dávkovanie pre dospelých (1-2 vety)",
+    "davkovanie": <viď nižšie>,
     "vedlajsie_ucinky": "Najčastejšie vedľajšie účinky (1-2 vety)",
     "varovania": "Hlavné varovania a kontraindikácie (1-2 vety)",
     "skladovanie": "Podmienky skladovania (1 veta)",
     "interakcie": "Dôležité liekové interakcie alebo null ak nie sú relevantné"
 }}
+
+Pre pole "davkovanie":
+- Ak liek má dávkovanie závislé od veku alebo hmotnosti (napr. sirupy, kvapky, pediatrické lieky), vráť štruktúrovanú tabuľku:
+  {{"type": "table", "headers": ["Vek", "Dávka", "Max. denná dávka"], "rows": [["0-3 mes", "X mg", "Y mg"], ...]}}
+  Hlavičky tabuľky prispôsob podľa relevantných stĺpcov (môžu byť napr. Vek, Hmotnosť, Dávka, Max. denná dávka atď.)
+- Inak vráť bežný text (1-2 vety) ako reťazec.
 
 Odpovedz IBA s JSON objektom, bez ďalšieho textu."""
 
