@@ -11,7 +11,7 @@ _LOGGER = logging.getLogger(__name__)
 _RESOURCE_URL = "/local/medicine-count-expiry/medicine-count-card.js"
 
 
-def async_register_frontend(hass: HomeAssistant) -> None:
+def register_frontend(hass: HomeAssistant) -> None:
     """Register Lovelace card as a frontend resource."""
 
     try:
