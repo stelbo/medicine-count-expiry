@@ -9,21 +9,22 @@ from homeassistant.core import HomeAssistant
 _LOGGER = logging.getLogger(__name__)
 
 _RESOURCE_URL = "/local/medicine-count-expiry/medicine-count-card.js"
+_EDITOR_URL = "/local/medicine-count-expiry/editor.js"
 
 
 def register_frontend(hass: HomeAssistant) -> None:
     """Register Lovelace card as a frontend resource."""
 
-    try:
-        # Register the card JS file as a frontend resource
-        add_extra_js_url(hass, _RESOURCE_URL)
-        _LOGGER.info(
-            "Medicine Count & Expiry card registered as frontend resource at %s",
-            _RESOURCE_URL,
-        )
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.warning(
-            "Could not register medicine-count-card frontend resource (%s): %s",
-            type(err).__name__,
-            err,
-        )
+    for url in (_RESOURCE_URL, _EDITOR_URL):
+        try:
+            add_extra_js_url(hass, url)
+            _LOGGER.info(
+                "Medicine Count & Expiry registered frontend resource at %s",
+                url,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "Could not register medicine-count-card frontend resource (%s): %s",
+                type(err).__name__,
+                err,
+            )
