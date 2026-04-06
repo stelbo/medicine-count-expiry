@@ -67,6 +67,9 @@ async def _retry_with_backoff(
                     last_exception,
                 )
 
+    # last_exception is always set here: the loop only exits without returning
+    # when all attempts raised a retriable error.
+    assert last_exception is not None
     raise last_exception
 
 
