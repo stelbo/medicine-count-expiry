@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from custom_components.medicine_count_expiry.ai.claude_verifier import (
     ClaudeVerifier,
     _parse_claude_response,
+    _retry_with_backoff,
 )
 
 
@@ -652,3 +653,243 @@ async def test_generate_leaflet_markdown_wrapped_response(verifier):
 
     assert result["pouzitie"] == "Úľava od bolesti a horúčky."
     assert "error" not in result
+
+
+# ── _retry_with_backoff tests ─────────────────────────────────────────────────
+
+
+def _make_overload_error(status_code: int):
+    """Create an exception that mimics an Anthropic API overload/rate-limit error."""
+    err = Exception(f"Error code: {status_code}")
+    err.status_code = status_code
+    return err
+
+
+@pytest.mark.asyncio
+async def test_retry_with_backoff_succeeds_on_first_attempt():
+    """_retry_with_backoff should return immediately when the first call succeeds."""
+    async def _coro():
+        return "ok"
+
+    result = await _retry_with_backoff(_coro)
+    assert result == "ok"
+
+
+@pytest.mark.asyncio
+async def test_retry_with_backoff_retries_on_529(monkeypatch):
+    """_retry_with_backoff should retry when status_code 529 is raised."""
+    call_count = 0
+
+    async def _coro():
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            raise _make_overload_error(529)
+        return "success"
+
+    monkeypatch.setattr(
+        "custom_components.medicine_count_expiry.ai.claude_verifier.asyncio.sleep",
+        AsyncMock(),
+    )
+
+    result = await _retry_with_backoff(_coro, max_retries=3, base_delay=0.0)
+    assert result == "success"
+    assert call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_retry_with_backoff_retries_on_429(monkeypatch):
+    """_retry_with_backoff should retry when status_code 429 is raised."""
+    call_count = 0
+
+    async def _coro():
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise _make_overload_error(429)
+        return "success"
+
+    monkeypatch.setattr(
+        "custom_components.medicine_count_expiry.ai.claude_verifier.asyncio.sleep",
+        AsyncMock(),
+    )
+
+    result = await _retry_with_backoff(_coro, max_retries=3, base_delay=0.0)
+    assert result == "success"
+    assert call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_retry_with_backoff_raises_immediately_on_other_errors():
+    """_retry_with_backoff should not retry on errors other than 429/529."""
+    call_count = 0
+
+    async def _coro():
+        nonlocal call_count
+        call_count += 1
+        raise RuntimeError("unexpected error")
+
+    with pytest.raises(RuntimeError, match="unexpected error"):
+        await _retry_with_backoff(_coro, max_retries=3)
+
+    assert call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_retry_with_backoff_exhausts_retries_and_raises(monkeypatch):
+    """_retry_with_backoff should raise the last exception after all retries fail."""
+    call_count = 0
+
+    async def _coro():
+        nonlocal call_count
+        call_count += 1
+        raise _make_overload_error(529)
+
+    monkeypatch.setattr(
+        "custom_components.medicine_count_expiry.ai.claude_verifier.asyncio.sleep",
+        AsyncMock(),
+    )
+
+    with pytest.raises(Exception) as exc_info:
+        await _retry_with_backoff(_coro, max_retries=3, base_delay=0.0)
+
+    assert call_count == 3
+    assert exc_info.value.status_code == 529
+
+
+@pytest.mark.asyncio
+async def test_extract_label_info_retries_on_529(verifier, monkeypatch):
+    """extract_label_info should retry automatically on a 529 overloaded error."""
+    mock_response_data = {
+        "medicine_name": "Aspirin 100mg",
+        "description": "100mg tablets",
+        "confidence": {"medicine_name": 0.9, "description": 0.8},
+    }
+    call_count = 0
+
+    async def mock_create(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise _make_overload_error(529)
+        return _mock_anthropic_response(json.dumps(mock_response_data))
+
+    monkeypatch.setattr(
+        "custom_components.medicine_count_expiry.ai.claude_verifier.asyncio.sleep",
+        AsyncMock(),
+    )
+
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = mock_create
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_label_info(b"fake_bytes")
+
+    assert call_count == 2
+    assert result["medicine_name"] == "Aspirin 100mg"
+
+
+@pytest.mark.asyncio
+async def test_extract_from_image_retries_on_529(verifier, monkeypatch):
+    """extract_from_image should retry automatically on a 529 overloaded error."""
+    mock_response_data = {
+        "medicine_name": "Ibuprofen 200mg",
+        "expiry_date": "2027-06-30",
+        "description": "200mg tablets",
+        "confidence": {"medicine_name": 0.9, "expiry_date": 0.85, "description": 0.8},
+    }
+    call_count = 0
+
+    async def mock_create(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise _make_overload_error(529)
+        return _mock_anthropic_response(json.dumps(mock_response_data))
+
+    monkeypatch.setattr(
+        "custom_components.medicine_count_expiry.ai.claude_verifier.asyncio.sleep",
+        AsyncMock(),
+    )
+
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = mock_create
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_from_image(b"fake_bytes")
+
+    assert call_count == 2
+    assert result["medicine_name"] == "Ibuprofen 200mg"
+
+
+@pytest.mark.asyncio
+async def test_generate_leaflet_retries_on_529(verifier, monkeypatch):
+    """generate_leaflet should retry automatically on a 529 overloaded error."""
+    mock_response_data = {
+        "pouzitie": "Úľava od bolesti.",
+        "davkovanie": "500 mg každých 6 hodín.",
+        "vedlajsie_ucinky": "Nausea.",
+        "varovania": "Neprekonať dennú dávku.",
+        "skladovanie": "Chladné miesto.",
+        "interakcie": None,
+    }
+    call_count = 0
+
+    async def mock_create(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise _make_overload_error(529)
+        return _mock_anthropic_response(json.dumps(mock_response_data))
+
+    monkeypatch.setattr(
+        "custom_components.medicine_count_expiry.ai.claude_verifier.asyncio.sleep",
+        AsyncMock(),
+    )
+
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = mock_create
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.generate_leaflet("Paracetamol 500mg")
+
+    assert call_count == 2
+    assert result["pouzitie"] == "Úľava od bolesti."
+    assert "error" not in result
+
+
+@pytest.mark.asyncio
+async def test_verify_medicine_retries_on_529(verifier, monkeypatch):
+    """verify_medicine should retry automatically on a 529 overloaded error."""
+    mock_response_data = {
+        "verified": True,
+        "confidence_score": 0.95,
+        "notes": "All valid.",
+        "normalized_expiry": "2026-12-31",
+    }
+    call_count = 0
+
+    async def mock_create(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise _make_overload_error(529)
+        return _mock_anthropic_response(json.dumps(mock_response_data))
+
+    monkeypatch.setattr(
+        "custom_components.medicine_count_expiry.ai.claude_verifier.asyncio.sleep",
+        AsyncMock(),
+    )
+
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = mock_create
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.verify_medicine("Aspirin 100mg", "2026-12-31")
+
+    assert call_count == 2
+    assert result["verified"] is True
