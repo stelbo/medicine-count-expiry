@@ -463,7 +463,7 @@ class MedicineCountCard extends HTMLElement {
           <label class="form-label">
             Quantity
             <input class="form-input" name="quantity" type="number" min="1"
-              value="${parseInt(this._formData.quantity || "1", 10)}" />
+              value="${parseInt(this._formData.quantity || "1", 10) || 1}" />
           </label>
           <label class="form-label">
             Unit
@@ -914,8 +914,9 @@ class MedicineCountCard extends HTMLElement {
         medicine_name: name,
         expiry_date: expiry,
         description: this._formData.description || "",
-        quantity: parseInt(getValue("quantity") || "1", 10),
+        quantity: parseInt(getValue("quantity") || "1", 10) || 1,
         location: getValue("location") || "unknown",
+        unit: getValue("unit") || "",
         ai_verified: !!(this._formData.labelConfidence && this._formData.labelConfidence.medicine_name),
         confidence_score: (this._formData.labelConfidence || {}).medicine_name || 0.0,
       });
