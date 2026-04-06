@@ -168,7 +168,7 @@ class MedicineCountCard extends HTMLElement {
     for (const field of fields) {
       const pc = prevConf[field] || 0;
       const nc = nextConf[field] || 0;
-      if (nc > pc && next[field] != null) {
+      if (nc > pc && next[field] !== null && next[field] !== undefined) {
         merged[field] = next[field];
         mergedConf[field] = nc;
       }
