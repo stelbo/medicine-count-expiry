@@ -537,6 +537,14 @@ def test_parse_claude_response_bare_code_fence():
     assert result == data
 
 
+def test_parse_claude_response_uppercase_json_tag():
+    """_parse_claude_response should handle uppercase JSON language tag."""
+    data = {"medicine_name": "Aspirin"}
+    wrapped = f"```JSON\n{json.dumps(data)}\n```"
+    result = _parse_claude_response(wrapped)
+    assert result == data
+
+
 def test_parse_claude_response_strips_whitespace():
     """_parse_claude_response should handle leading/trailing whitespace."""
     data = {"key": "value"}

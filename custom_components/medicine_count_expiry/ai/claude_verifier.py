@@ -29,8 +29,13 @@ def _parse_claude_response(response_text: str) -> dict:
         parts = response_text.split("```")
         if len(parts) >= 2:
             response_text = parts[1]
-            # Remove optional "json" language tag
-            if response_text.startswith("json"):
+            # Remove optional language tag (e.g. "json", "JSON") before the first newline
+            newline_pos = response_text.find("\n")
+            if newline_pos != -1:
+                possible_tag = response_text[:newline_pos].strip()
+                if possible_tag and possible_tag.isalpha():
+                    response_text = response_text[newline_pos:].lstrip()
+            elif response_text.lower().startswith("json"):
                 response_text = response_text[4:].lstrip()
 
     return json.loads(response_text.strip())

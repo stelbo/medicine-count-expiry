@@ -289,7 +289,7 @@ class MedicineCountCard extends HTMLElement {
   }
 
   _getConfidenceBadge(score) {
-    if (score === null || score === undefined || score === 0) return "";
+    if (score === null || score === undefined || isNaN(score)) return "";
     const pct = Math.round(score * 100);
     const cls = score >= 0.95 ? "conf-excellent"
       : score >= 0.85 ? "conf-good"
@@ -604,7 +604,7 @@ class MedicineCountCard extends HTMLElement {
       : "Good";
     const daysInfo = this._getDaysInfo(m.expiry_date);
     const hasLeaflet = m.ai_leaflet ? ' title="Leaflet available – click for details"' : "";
-    const confidenceBadge = m.confidence_score > 0 ? this._getConfidenceBadge(m.confidence_score) : "";
+    const confidenceBadge = m.confidence_score != null ? this._getConfidenceBadge(m.confidence_score) : "";
 
     return `
       <div class="medicine-item ${statusClass} clickable-item" data-id="${this._escHtml(m.medicine_id)}"${hasLeaflet}>
@@ -945,7 +945,7 @@ class MedicineCountCard extends HTMLElement {
         unit: getValue("unit") || "",
         ai_verified: !!(this._formData.labelConfidence && this._formData.labelConfidence.medicine_name),
         confidence_score: this._computeOverallConfidence(),
-        ai_extraction_source: this._formData.labelConfidence ? "scanned_label" : "manual",
+        ai_extraction_source: (this._formData.labelConfidence || this._formData.expiryConfidence) ? "scanned_label" : "manual",
         ai_extraction_timestamp: new Date().toISOString(),
       });
     });
