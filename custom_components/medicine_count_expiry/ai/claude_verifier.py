@@ -1,12 +1,76 @@
 """Claude AI verification for medicine data."""
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
+import random
 from typing import Any
 
+from ..const import CLAUDE_BASE_RETRY_DELAY, CLAUDE_MAX_RETRIES, CLAUDE_MAX_RETRY_DELAY
+
 _LOGGER = logging.getLogger(__name__)
+
+
+async def _retry_with_backoff(
+    coro,
+    max_retries: int = CLAUDE_MAX_RETRIES,
+    base_delay: float = CLAUDE_BASE_RETRY_DELAY,
+    max_delay: float = CLAUDE_MAX_RETRY_DELAY,
+) -> Any:
+    """Retry async operation with exponential backoff.
+
+    Args:
+        coro: Callable returning an async coroutine to retry
+        max_retries: Maximum number of retry attempts
+        base_delay: Initial delay in seconds
+        max_delay: Maximum delay in seconds
+
+    Returns:
+        Result of successful coroutine execution
+
+    Raises:
+        Last exception if all retries fail
+    """
+    last_exception = None
+
+    for attempt in range(max_retries):
+        try:
+            return await coro()
+        except Exception as e:
+            last_exception = e
+
+            error_code = getattr(e, "status_code", None)
+
+            # Only retry on 429 (rate limit) and 529 (overloaded)
+            if error_code not in (429, 529):
+                raise
+
+            if attempt < max_retries - 1:
+                delay = min(
+                    base_delay * (2 ** attempt) + random.uniform(0, 1),
+                    max_delay,
+                )
+                _LOGGER.warning(
+                    "Claude API overloaded (error %s). Retrying in %.1f seconds... (attempt %d/%d)",
+                    error_code,
+                    delay,
+                    attempt + 1,
+                    max_retries,
+                )
+                await asyncio.sleep(delay)
+            else:
+                _LOGGER.error(
+                    "Claude API failed after %d attempts. Last error: %s",
+                    max_retries,
+                    last_exception,
+                )
+
+    # last_exception is always set here: the loop only exits without returning
+    # when all attempts raised a retriable error.
+    assert last_exception is not None
+    raise last_exception
 
 
 def _get_anthropic():
@@ -157,11 +221,15 @@ class ClaudeVerifier:
                 expiry_date=expiry_date,
                 description=description,
             )
-            message = await client.messages.create(
-                model=self._model,
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}],
-            )
+
+            async def _call():
+                return await client.messages.create(
+                    model=self._model,
+                    max_tokens=1024,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+
+            message = await _retry_with_backoff(_call)
             response_text = message.content[0].text.strip()
             _LOGGER.debug("Claude verify raw response: %s", response_text[:200])
             result = _parse_claude_response(response_text)
@@ -188,11 +256,15 @@ class ClaudeVerifier:
         try:
             client = self._get_client()
             prompt = GENERATE_LEAFLET_PROMPT.format(medicine_name=medicine_name)
-            message = await client.messages.create(
-                model=self._model,
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}],
-            )
+
+            async def _call():
+                return await client.messages.create(
+                    model=self._model,
+                    max_tokens=1024,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+
+            message = await _retry_with_backoff(_call)
             response_text = message.content[0].text.strip()
             _LOGGER.debug("Claude leaflet raw response: %s", response_text[:200])
             result = _parse_claude_response(response_text)
@@ -252,29 +324,33 @@ class ClaudeVerifier:
         try:
             client = self._get_client()
             image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
-            message = await client.messages.create(
-                model=self._model,
-                max_tokens=512,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": media_type,
-                                    "data": image_b64,
+
+            async def _call():
+                return await client.messages.create(
+                    model=self._model,
+                    max_tokens=512,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": media_type,
+                                        "data": image_b64,
+                                    },
                                 },
-                            },
-                            {
-                                "type": "text",
-                                "text": EXTRACT_LABEL_PROMPT,
-                            },
-                        ],
-                    }
-                ],
-            )
+                                {
+                                    "type": "text",
+                                    "text": EXTRACT_LABEL_PROMPT,
+                                },
+                            ],
+                        }
+                    ],
+                )
+
+            message = await _retry_with_backoff(_call)
             response_text = message.content[0].text.strip()
             _LOGGER.debug("Claude label raw response: %s", response_text[:200])
 
@@ -319,29 +395,33 @@ class ClaudeVerifier:
         try:
             client = self._get_client()
             image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
-            message = await client.messages.create(
-                model=self._model,
-                max_tokens=1024,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": media_type,
-                                    "data": image_b64,
+
+            async def _call():
+                return await client.messages.create(
+                    model=self._model,
+                    max_tokens=1024,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": media_type,
+                                        "data": image_b64,
+                                    },
                                 },
-                            },
-                            {
-                                "type": "text",
-                                "text": EXTRACT_FROM_IMAGE_PROMPT,
-                            },
-                        ],
-                    }
-                ],
-            )
+                                {
+                                    "type": "text",
+                                    "text": EXTRACT_FROM_IMAGE_PROMPT,
+                                },
+                            ],
+                        }
+                    ],
+                )
+
+            message = await _retry_with_backoff(_call)
             response_text = message.content[0].text.strip()
             _LOGGER.debug("Claude image raw response: %s", response_text[:200])
             result = _parse_claude_response(response_text)

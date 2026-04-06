@@ -75,3 +75,8 @@ ATTR_STATUS = "status"
 # Claude model
 CLAUDE_MODEL = "claude-sonnet-4-6"
 CLAUDE_MAX_TOKENS = 1024
+
+# Claude API retry configuration
+CLAUDE_MAX_RETRIES = 3
+CLAUDE_BASE_RETRY_DELAY = 1.0
+CLAUDE_MAX_RETRY_DELAY = 30.0
