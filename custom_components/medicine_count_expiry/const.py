@@ -73,5 +73,5 @@ ATTR_UPDATED_DATE = "updated_date"
 ATTR_STATUS = "status"
 
 # Claude model
-CLAUDE_MODEL = "claude-3-5-sonnet-20241022"
+CLAUDE_MODEL = "claude-sonnet-4-6"
 CLAUDE_MAX_TOKENS = 1024

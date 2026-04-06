@@ -99,7 +99,7 @@ Respond ONLY with the JSON object, no other text."""
 class ClaudeVerifier:
     """Verifies medicine data using Claude AI."""
 
-    def __init__(self, api_key: str, model: str = "claude-3-5-sonnet-20241022") -> None:
+    def __init__(self, api_key: str, model: str = "claude-sonnet-4-6") -> None:
         """Initialize the Claude verifier."""
         self._api_key = api_key
         self._model = model
