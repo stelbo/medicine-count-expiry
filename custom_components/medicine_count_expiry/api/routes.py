@@ -220,7 +220,7 @@ class MedicineScanView(HomeAssistantView):
         try:
             data = await request.read()
             content_type = request.content_type or "image/jpeg"
-            result = await claude_verifier.extract_from_image(data, content_type)
+            result = await claude_verifier.extract_and_verify(data, content_type)
             return web.json_response(result)
         except Exception as e:
             _LOGGER.error("Scan error: %s", e)
