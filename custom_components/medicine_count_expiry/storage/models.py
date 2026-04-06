@@ -50,13 +50,16 @@ class Medicine:
             "ai_leaflet_generated_at": self.ai_leaflet_generated_at,
         }
 
-    def get_status(self, warning_days: int = 30) -> str:
+    def get_status(self, warning_days: Optional[int] = None) -> str:
         """Get the expiry status of this medicine.
 
         Args:
             warning_days: Number of days ahead of expiry to consider "expiring soon".
+                          Defaults to DEFAULT_EXPIRY_WARNING_DAYS if not provided.
         """
-        from ..const import STATUS_EXPIRED, STATUS_EXPIRING_SOON, STATUS_GOOD, STATUS_UNKNOWN
+        from ..const import DEFAULT_EXPIRY_WARNING_DAYS, STATUS_EXPIRED, STATUS_EXPIRING_SOON, STATUS_GOOD, STATUS_UNKNOWN
+        if warning_days is None:
+            warning_days = DEFAULT_EXPIRY_WARNING_DAYS
         try:
             expiry = date.fromisoformat(self.expiry_date)
             today = date.today()
