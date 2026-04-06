@@ -2,22 +2,19 @@
 from __future__ import annotations
 
 import logging
-from typing import Final
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, PLATFORMS
-from .frontend import async_register_frontend
+from .frontend import register_frontend
 
 _LOGGER = logging.getLogger(__name__)
-
-CONFIG_SCHEMA: Final = {}  # No YAML configuration support
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Medicine Count & Expiry component."""
-    await async_register_frontend(hass)
+    register_frontend(hass)
     return True
 
 
