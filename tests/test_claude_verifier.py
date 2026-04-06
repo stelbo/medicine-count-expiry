@@ -140,15 +140,12 @@ async def test_extract_from_image_api_error(verifier):
 
 def test_get_client_missing_anthropic():
     """ClaudeVerifier should raise ImportError at construction when anthropic is not installed."""
-    import custom_components.medicine_count_expiry.ai.claude_verifier as cv_module
-
-    original = cv_module._anthropic_module
-    try:
-        cv_module._anthropic_module = None
+    with patch(
+        "custom_components.medicine_count_expiry.ai.claude_verifier._get_anthropic",
+        side_effect=ImportError("anthropic package is required"),
+    ):
         with pytest.raises(ImportError, match="anthropic package is required"):
             ClaudeVerifier(api_key="test-key-123")
-    finally:
-        cv_module._anthropic_module = original
 
 
 def test_client_is_cached(verifier):
@@ -400,3 +397,112 @@ async def test_extract_and_verify_verification_fails_gracefully(verifier):
     # Verification failed gracefully – verified flag is False and confidence_score is 0
     assert result["verified"] is False
     assert result["overall_confidence"] == pytest.approx(0.0)
+
+
+@pytest.mark.asyncio
+async def test_extract_label_info_empty_response_triggers_retry(verifier):
+    """extract_label_info should retry once when Claude returns an empty response."""
+    mock_response_data = {
+        "medicine_name": "Aspirin Plus",
+        "description": "500mg tablets",
+        "confidence": {"medicine_name": 0.95, "description": 0.90},
+    }
+
+    call_count = 0
+
+    async def mock_create(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return _mock_anthropic_response("")  # empty on first attempt
+        return _mock_anthropic_response(json.dumps(mock_response_data))
+
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = mock_create
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_label_info(b"fake_bytes")
+
+    assert call_count == 2
+    assert result["medicine_name"] == "Aspirin Plus"
+
+
+@pytest.mark.asyncio
+async def test_extract_label_info_empty_medicine_name_triggers_retry(verifier):
+    """extract_label_info should retry once when Claude returns a result with no medicine_name."""
+    mock_response_data = {
+        "medicine_name": "Paracetamol 500mg",
+        "description": "500mg tablets",
+        "confidence": {"medicine_name": 0.88, "description": 0.85},
+    }
+
+    call_count = 0
+
+    async def mock_create(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return _mock_anthropic_response(json.dumps({"medicine_name": None, "description": None, "confidence": {}}))
+        return _mock_anthropic_response(json.dumps(mock_response_data))
+
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = mock_create
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_label_info(b"fake_bytes")
+
+    assert call_count == 2
+    assert result["medicine_name"] == "Paracetamol 500mg"
+
+
+@pytest.mark.asyncio
+async def test_extract_label_info_no_retry_on_second_attempt(verifier):
+    """extract_label_info should not retry more than once even if second attempt also fails."""
+    call_count = 0
+
+    async def mock_create(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        return _mock_anthropic_response("")
+
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = mock_create
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_label_info(b"fake_bytes")
+
+    assert call_count == 2
+    assert result["medicine_name"] is None
+    assert result["description"] is None
+
+
+@pytest.mark.asyncio
+async def test_extract_label_info_empty_string_medicine_name_triggers_retry(verifier):
+    """extract_label_info should retry when Claude returns an empty string as medicine_name."""
+    mock_response_data = {
+        "medicine_name": "Ibuprofen 400mg",
+        "description": "400mg tablets",
+        "confidence": {"medicine_name": 0.92, "description": 0.88},
+    }
+
+    call_count = 0
+
+    async def mock_create(**kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return _mock_anthropic_response(json.dumps({"medicine_name": "", "description": None, "confidence": {}}))
+        return _mock_anthropic_response(json.dumps(mock_response_data))
+
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = mock_create
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_label_info(b"fake_bytes")
+
+    assert call_count == 2
+    assert result["medicine_name"] == "Ibuprofen 400mg"
