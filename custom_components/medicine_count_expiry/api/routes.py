@@ -147,6 +147,58 @@ class MedicineDetailView(HomeAssistantView):
         return web.json_response({"success": True})
 
 
+class MedicineLeafletView(HomeAssistantView):
+    """View to generate or retrieve a Slovak package leaflet for a medicine."""
+
+    url = "/api/medicine_count_expiry/medicines/{medicine_id}/leaflet"
+    name = "api:medicine_count_expiry:medicine_leaflet"
+    requires_auth = True
+
+    async def post(self, request: web.Request, medicine_id: str) -> web.Response:
+        """Handle POST request - generate or return cached leaflet."""
+        hass = request.app["hass"]
+        database = hass.data[DOMAIN]["database"]
+        claude_verifier = hass.data[DOMAIN].get("claude_verifier")
+
+        medicine = await hass.async_add_executor_job(database.get_medicine, medicine_id)
+        if not medicine:
+            return web.json_response({"error": "Medicine not found"}, status=404)
+
+        # Return cached leaflet if already generated
+        if medicine.ai_leaflet:
+            return web.json_response(
+                {
+                    "leaflet": medicine.ai_leaflet,
+                    "generated_at": medicine.ai_leaflet_generated_at,
+                    "cached": True,
+                }
+            )
+
+        if not claude_verifier:
+            return web.json_response(
+                {"error": "Claude AI is not configured"}, status=503
+            )
+
+        try:
+            leaflet = await claude_verifier.generate_leaflet(medicine.medicine_name)
+            generated_at = __import__("datetime").datetime.now().isoformat()
+            updated = await hass.async_add_executor_job(
+                database.save_leaflet, medicine_id, leaflet, generated_at
+            )
+            if not updated:
+                return web.json_response({"error": "Failed to save leaflet"}, status=500)
+            return web.json_response(
+                {
+                    "leaflet": leaflet,
+                    "generated_at": generated_at,
+                    "cached": False,
+                }
+            )
+        except Exception as e:
+            _LOGGER.error("Leaflet generation error: %s", e)
+            return web.json_response({"error": str(e)}, status=500)
+
+
 class MedicineScanView(HomeAssistantView):
     """View to scan a medicine image with Claude AI."""
 

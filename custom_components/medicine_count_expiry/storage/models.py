@@ -27,6 +27,8 @@ class Medicine:
     confidence_score: float = 0.0
     added_date: str = field(default_factory=lambda: datetime.now().isoformat())
     updated_date: str = field(default_factory=lambda: datetime.now().isoformat())
+    ai_leaflet: Optional[dict] = None
+    ai_leaflet_generated_at: Optional[str] = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -43,6 +45,8 @@ class Medicine:
             "added_date": self.added_date,
             "updated_date": self.updated_date,
             "status": self.get_status(),
+            "ai_leaflet": self.ai_leaflet,
+            "ai_leaflet_generated_at": self.ai_leaflet_generated_at,
         }
 
     def get_status(self, warning_days: int = 30) -> str:
@@ -68,6 +72,14 @@ class Medicine:
     @classmethod
     def from_dict(cls, data: dict) -> "Medicine":
         """Create Medicine from dictionary."""
+        import json as _json
+        ai_leaflet = data.get("ai_leaflet")
+        # ai_leaflet may arrive as a JSON string when read from SQLite
+        if isinstance(ai_leaflet, str):
+            try:
+                ai_leaflet = _json.loads(ai_leaflet)
+            except (ValueError, TypeError):
+                ai_leaflet = None
         return cls(
             medicine_id=data.get("medicine_id", generate_id()),
             medicine_name=data["medicine_name"],
@@ -80,4 +92,6 @@ class Medicine:
             confidence_score=data.get("confidence_score", 0.0),
             added_date=data.get("added_date", datetime.now().isoformat()),
             updated_date=data.get("updated_date", datetime.now().isoformat()),
+            ai_leaflet=ai_leaflet,
+            ai_leaflet_generated_at=data.get("ai_leaflet_generated_at"),
         )

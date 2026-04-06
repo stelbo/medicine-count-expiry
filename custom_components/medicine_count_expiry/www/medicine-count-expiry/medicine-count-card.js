@@ -17,10 +17,13 @@ class MedicineCountCard extends HTMLElement {
     this._filterLocation = "all";
     this._showAddForm = false;
     this._scanResult = null;
+    this._scanCount = 0;
     this._loading = false;
     this._error = null;
     this._hass = null;
     this._config = {};
+    this._selectedMedicine = null;
+    this._leafletLoading = false;
   }
 
   setConfig(config) {
@@ -111,6 +114,7 @@ class MedicineCountCard extends HTMLElement {
       });
       this._showAddForm = false;
       this._scanResult = null;
+      this._scanCount = 0;
       await this._fetchData();
     } catch (e) {
       this._error = `Failed to add: ${e.message}`;
@@ -139,12 +143,70 @@ class MedicineCountCard extends HTMLElement {
         headers: { "Content-Type": file.type || "image/jpeg" },
         body: file,
       });
-      this._scanResult = result;
+      if (this._scanResult && this._scanCount > 0) {
+        // Merge: keep value from scan with highest confidence for each field
+        this._scanResult = this._mergeScans(this._scanResult, result);
+      } else {
+        this._scanResult = result;
+      }
+      this._scanCount += 1;
       this._showAddForm = true;
     } catch (e) {
       this._error = `Scan failed: ${e.message}`;
     } finally {
       this._loading = false;
+      this.render();
+    }
+  }
+
+  _mergeScans(prev, next) {
+    const prevConf = prev.confidence || {};
+    const nextConf = next.confidence || {};
+    const merged = { ...prev };
+    const mergedConf = { ...prevConf };
+    const fields = ["medicine_name", "expiry_date", "description"];
+    for (const field of fields) {
+      const pc = prevConf[field] || 0;
+      const nc = nextConf[field] || 0;
+      if (nc > pc && next[field] != null) {
+        merged[field] = next[field];
+        mergedConf[field] = nc;
+      }
+    }
+    merged.confidence = mergedConf;
+    return merged;
+  }
+
+  async _openDetail(medicine) {
+    this._selectedMedicine = medicine;
+    this._leafletLoading = false;
+    this.render();
+  }
+
+  _closeDetail() {
+    this._selectedMedicine = null;
+    this._leafletLoading = false;
+    this.render();
+  }
+
+  async _generateLeaflet(medicineId) {
+    this._leafletLoading = true;
+    this.render();
+    try {
+      const result = await this._apiFetch(`/medicines/${medicineId}/leaflet`, {
+        method: "POST",
+      });
+      // Update the selected medicine and the medicines list with fresh data
+      const updated = await this._apiFetch(`/medicines/${medicineId}`);
+      this._selectedMedicine = updated;
+      this._medicines = this._medicines.map((m) =>
+        m.medicine_id === medicineId ? updated : m
+      );
+      this._applyFilters();
+    } catch (e) {
+      this._error = `Failed to generate leaflet: ${e.message}`;
+    } finally {
+      this._leafletLoading = false;
       this.render();
     }
   }
@@ -172,12 +234,14 @@ class MedicineCountCard extends HTMLElement {
         </div>
       </ha-card>
       ${this._showAddForm ? this._renderModal() : ""}
+      ${this._selectedMedicine ? this._renderDetailPanel() : ""}
     `;
     this._attachEventListeners();
   }
 
   _renderModal() {
     const sr = this._scanResult || {};
+    const hasScanned = this._scanCount > 0;
     return `
       <div class="modal-backdrop">
         <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -186,7 +250,7 @@ class MedicineCountCard extends HTMLElement {
             <button class="icon-btn cancel-add" title="Close dialog">✕</button>
           </div>
           <div class="modal-body">
-            ${sr.medicine_name || sr.expiry_date ? '<div class="scan-notice">✅ Pre-filled from scan result</div>' : ""}
+            ${hasScanned ? `<div class="scan-notice">✅ Pre-filled from scan result (scan #${this._scanCount})</div>` : (sr.medicine_name || sr.expiry_date ? '<div class="scan-notice">✅ Pre-filled from scan result</div>' : "")}
             <div class="form-grid">
               <label class="form-label">
                 Name <span class="required">*</span>
@@ -236,10 +300,12 @@ class MedicineCountCard extends HTMLElement {
             </div>
           </div>
           <div class="modal-footer">
-            <label class="scan-btn-label" title="Scan medicine label with camera">
-              📷 Scan Label
-              <input class="scan-input" type="file" accept="image/*" capture="environment" />
-            </label>
+            <div class="scan-actions">
+              <label class="scan-btn-label" title="${hasScanned ? "Scan again to improve results" : "Scan medicine label with camera"}">
+                ${hasScanned ? "📷 Scan Again" : "📷 Scan Label"}
+                <input class="scan-input" type="file" accept="image/*" capture="environment" />
+              </label>
+            </div>
             <div class="modal-actions">
               <button class="btn btn-secondary cancel-add">Cancel</button>
               <button class="btn btn-primary submit-add">Add Medicine</button>
@@ -332,9 +398,10 @@ class MedicineCountCard extends HTMLElement {
       : m.status === "expiring_soon" ? "Expiring Soon"
       : "Good";
     const daysInfo = this._getDaysInfo(m.expiry_date);
+    const hasLeaflet = m.ai_leaflet ? ' title="Leaflet available – click for details"' : "";
 
     return `
-      <div class="medicine-item ${statusClass}" data-id="${this._escHtml(m.medicine_id)}">
+      <div class="medicine-item ${statusClass} clickable-item" data-id="${this._escHtml(m.medicine_id)}"${hasLeaflet}>
         <div class="medicine-status-bar"></div>
         <div class="medicine-body">
           <div class="medicine-main">
@@ -344,6 +411,7 @@ class MedicineCountCard extends HTMLElement {
               <span class="meta-chip">📍 ${this._escHtml(m.location || "unknown")}</span>
               <span class="meta-chip">📦 ×${m.quantity}</span>
               ${m.ai_verified ? `<span class="meta-chip ai-verified" title="AI verified (${Math.round((m.confidence_score || 0) * 100)}% confidence)">🤖 Verified</span>` : ""}
+              ${m.ai_leaflet ? '<span class="meta-chip leaflet-chip">🇸🇰 Leaflet</span>' : ""}
             </div>
           </div>
           <div class="medicine-expiry">
@@ -355,6 +423,105 @@ class MedicineCountCard extends HTMLElement {
         </div>
       </div>
     `;
+  }
+
+  _renderDetailPanel() {
+    const m = this._selectedMedicine;
+    if (!m) return "";
+    const statusClass = m.status === "expired" ? "status-expired"
+      : m.status === "expiring_soon" ? "status-expiring"
+      : "status-good";
+    const statusLabel = m.status === "expired" ? "Expired"
+      : m.status === "expiring_soon" ? "Expiring Soon"
+      : "Good";
+    const daysInfo = this._getDaysInfo(m.expiry_date);
+
+    return `
+      <div class="modal-backdrop detail-backdrop">
+        <div class="modal-dialog detail-dialog" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+          <div class="modal-header">
+            <h3 class="modal-title" id="detail-title">💊 ${this._escHtml(m.medicine_name)}</h3>
+            <button class="icon-btn close-detail" title="Close">✕</button>
+          </div>
+          <div class="modal-body detail-body">
+            <div class="detail-info-grid">
+              <div class="detail-field">
+                <span class="detail-label">Expiry Date</span>
+                <span class="detail-value">${this._escHtml(m.expiry_date)}</span>
+              </div>
+              <div class="detail-field">
+                <span class="detail-label">Status</span>
+                <span class="status-badge ${statusClass}">${statusLabel}</span>
+              </div>
+              <div class="detail-field">
+                <span class="detail-label">Days</span>
+                <span class="detail-value expiry-days ${statusClass}">${daysInfo}</span>
+              </div>
+              <div class="detail-field">
+                <span class="detail-label">Location</span>
+                <span class="detail-value">📍 ${this._escHtml(m.location || "unknown")}</span>
+              </div>
+              <div class="detail-field">
+                <span class="detail-label">Quantity</span>
+                <span class="detail-value">📦 ${m.quantity}${m.unit ? " " + this._escHtml(m.unit) : ""}</span>
+              </div>
+              ${m.description ? `<div class="detail-field detail-field-wide">
+                <span class="detail-label">Description</span>
+                <span class="detail-value">${this._escHtml(m.description)}</span>
+              </div>` : ""}
+              ${m.ai_verified ? `<div class="detail-field detail-field-wide">
+                <span class="detail-label">AI Verification</span>
+                <span class="detail-value">🤖 Verified (${Math.round((m.confidence_score || 0) * 100)}% confidence)</span>
+              </div>` : ""}
+            </div>
+
+            <div class="leaflet-section">
+              <div class="leaflet-header">
+                <span class="leaflet-title">🇸🇰 Príbalový leták (AI)</span>
+                ${!m.ai_leaflet && !this._leafletLoading
+                  ? `<button class="btn btn-primary generate-leaflet-btn" data-id="${this._escHtml(m.medicine_id)}">Generate Leaflet</button>`
+                  : ""}
+                ${this._leafletLoading ? '<span class="leaflet-loading"><div class="spinner spinner-sm"></div> Generating…</span>' : ""}
+              </div>
+              ${m.ai_leaflet ? this._renderLeaflet(m.ai_leaflet, m.ai_leaflet_generated_at) : (!this._leafletLoading ? '<p class="leaflet-placeholder">Click "Generate Leaflet" to create a Slovak package leaflet summary using Claude AI.</p>' : "")}
+            </div>
+          </div>
+          <div class="modal-footer">
+            <div></div>
+            <button class="btn btn-secondary close-detail">Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderLeaflet(leaflet, generatedAt) {
+    if (!leaflet) return "";
+    const sections = [
+      { key: "pouzitie", icon: "📝", label: "Použitie" },
+      { key: "davkovanie", icon: "💊", label: "Dávkovanie" },
+      { key: "vedlajsie_ucinky", icon: "⚠️", label: "Vedľajšie účinky" },
+      { key: "varovania", icon: "🚨", label: "Varovania" },
+      { key: "skladovanie", icon: "📦", label: "Skladovanie" },
+      { key: "interakcie", icon: "🔄", label: "Interakcie" },
+    ];
+
+    const rows = sections
+      .filter((s) => leaflet[s.key])
+      .map(
+        (s) => `
+        <div class="leaflet-row">
+          <div class="leaflet-row-header">${s.icon} ${s.label}</div>
+          <div class="leaflet-row-text">${this._escHtml(leaflet[s.key])}</div>
+        </div>`
+      )
+      .join("");
+
+    const genInfo = generatedAt
+      ? `<div class="leaflet-generated-at">Generated: ${this._escHtml(generatedAt.substring(0, 10))}</div>`
+      : "";
+
+    return `<div class="leaflet-content">${rows}${genInfo}</div>`;
   }
 
   _getDaysInfo(expiryDate) {
@@ -392,11 +559,13 @@ class MedicineCountCard extends HTMLElement {
     root.querySelector(".add-btn")?.addEventListener("click", () => {
       this._showAddForm = !this._showAddForm;
       this._scanResult = null;
+      this._scanCount = 0;
       this.render();
     });
     root.querySelector(".cancel-add")?.addEventListener("click", () => {
       this._showAddForm = false;
       this._scanResult = null;
+      this._scanCount = 0;
       this.render();
     });
 
@@ -441,6 +610,26 @@ class MedicineCountCard extends HTMLElement {
         e.stopPropagation();
         this._deleteMedicine(btn.dataset.id, btn.dataset.name);
       });
+    });
+
+    // Click on medicine item to open detail panel
+    root.querySelectorAll(".clickable-item").forEach((item) => {
+      item.addEventListener("click", () => {
+        const id = item.dataset.id;
+        const medicine = this._medicines.find((m) => m.medicine_id === id);
+        if (medicine) this._openDetail(medicine);
+      });
+    });
+
+    // Close detail panel
+    root.querySelectorAll(".close-detail").forEach((btn) => {
+      btn.addEventListener("click", () => this._closeDetail());
+    });
+
+    // Generate leaflet
+    root.querySelector(".generate-leaflet-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._generateLeaflet(e.currentTarget.dataset.id);
     });
 
     // Scan image
@@ -698,10 +887,54 @@ class MedicineCountCard extends HTMLElement {
       .empty-state { text-align: center; padding: 32px 16px; color: var(--secondary-text-color, #888); }
       .empty-icon { font-size: 2.5rem; margin-bottom: 8px; }
 
+      /* Clickable medicine item */
+      .clickable-item { cursor: pointer; }
+      .clickable-item:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.14); }
+
+      /* Leaflet chip */
+      .leaflet-chip { background: #e8eaf6; color: #3949ab; }
+
+      /* Detail panel */
+      .detail-dialog { max-width: 580px; }
+      .detail-body { display: flex; flex-direction: column; gap: 16px; }
+      .detail-info-grid {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 10px;
+      }
+      .detail-field { display: flex; flex-direction: column; gap: 3px; }
+      .detail-field-wide { grid-column: 1 / -1; }
+      .detail-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--secondary-text-color, #777); }
+      .detail-value { font-size: 0.9rem; font-weight: 500; }
+
+      /* Leaflet section */
+      .leaflet-section {
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 8px; padding: 12px;
+        background: var(--secondary-background-color, #f9f9f9);
+      }
+      .leaflet-header {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 10px; flex-wrap: wrap; gap: 8px;
+      }
+      .leaflet-title { font-weight: 600; font-size: 0.95rem; }
+      .leaflet-placeholder { color: var(--secondary-text-color, #888); font-size: 0.85rem; margin: 0; }
+      .leaflet-loading { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--secondary-text-color, #777); }
+      .spinner-sm { width: 16px; height: 16px; border-width: 2px; }
+      .leaflet-content { display: flex; flex-direction: column; gap: 8px; }
+      .leaflet-row { padding: 6px 0; border-bottom: 1px solid var(--divider-color, #eee); }
+      .leaflet-row:last-of-type { border-bottom: none; }
+      .leaflet-row-header { font-weight: 600; font-size: 0.8rem; color: var(--secondary-text-color, #555); margin-bottom: 2px; }
+      .leaflet-row-text { font-size: 0.875rem; }
+      .leaflet-generated-at { font-size: 0.7rem; color: var(--secondary-text-color, #999); margin-top: 8px; text-align: right; }
+
+      /* Scan actions */
+      .scan-actions { display: flex; gap: 8px; align-items: center; }
+
       @media (max-width: 400px) {
         .summary-grid { grid-template-columns: repeat(2, 1fr); }
         .search-bar { flex-direction: column; }
         .form-grid { grid-template-columns: 1fr; }
+        .detail-info-grid { grid-template-columns: 1fr; }
       }
     `;
   }

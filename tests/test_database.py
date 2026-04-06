@@ -143,3 +143,59 @@ def test_medicine_ai_verified_roundtrip(db):
     retrieved = db.get_medicine(m.medicine_id)
     assert retrieved.ai_verified is True
     assert abs(retrieved.confidence_score - 0.88) < 1e-6
+
+
+def test_save_leaflet_and_retrieve(db):
+    """save_leaflet should persist the leaflet JSON and return the updated medicine."""
+    m = Medicine(medicine_name="Paracetamol 500mg", expiry_date="2099-01-01")
+    db.add_medicine(m)
+
+    leaflet = {
+        "pouzitie": "Úľava od bolesti",
+        "davkovanie": "500mg každé 4 hodiny",
+        "vedlajsie_ucinky": "Vzácne nausea",
+        "varovania": "Neprekonať 4g denne",
+        "skladovanie": "Chladné miesto",
+        "interakcie": None,
+    }
+    generated_at = "2025-01-15T10:00:00"
+
+    updated = db.save_leaflet(m.medicine_id, leaflet, generated_at)
+    assert updated is not None
+    assert updated.ai_leaflet == leaflet
+    assert updated.ai_leaflet_generated_at == generated_at
+
+    # Verify it persists after a fresh read
+    retrieved = db.get_medicine(m.medicine_id)
+    assert retrieved.ai_leaflet == leaflet
+    assert retrieved.ai_leaflet_generated_at == generated_at
+
+
+def test_save_leaflet_nonexistent(db):
+    """save_leaflet on a non-existent ID should return None."""
+    result = db.save_leaflet("no-such-id", {"pouzitie": "test"}, "2025-01-01T00:00:00")
+    assert result is None
+
+
+def test_ai_leaflet_none_by_default(db):
+    """A newly added medicine should have ai_leaflet as None."""
+    m = Medicine(medicine_name="Test Drug", expiry_date="2099-01-01")
+    db.add_medicine(m)
+    retrieved = db.get_medicine(m.medicine_id)
+    assert retrieved.ai_leaflet is None
+    assert retrieved.ai_leaflet_generated_at is None
+
+
+def test_medicine_to_dict_includes_leaflet_fields(db):
+    """to_dict should include ai_leaflet and ai_leaflet_generated_at fields."""
+    leaflet = {"pouzitie": "Test", "davkovanie": "1 tab"}
+    m = Medicine(
+        medicine_name="Drug",
+        expiry_date="2099-01-01",
+        ai_leaflet=leaflet,
+        ai_leaflet_generated_at="2025-06-01T12:00:00",
+    )
+    d = m.to_dict()
+    assert "ai_leaflet" in d
+    assert d["ai_leaflet"] == leaflet
+    assert d["ai_leaflet_generated_at"] == "2025-06-01T12:00:00"
