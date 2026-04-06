@@ -199,3 +199,142 @@ def test_medicine_to_dict_includes_leaflet_fields(db):
     assert "ai_leaflet" in d
     assert d["ai_leaflet"] == leaflet
     assert d["ai_leaflet_generated_at"] == "2025-06-01T12:00:00"
+
+
+# ── Opening date / open expiry tests ─────────────────────────────────────────
+
+def test_open_fields_none_by_default(db):
+    """A new medicine should have date_opened and days_valid_after_opening as None."""
+    m = Medicine(medicine_name="Test Drug", expiry_date="2099-01-01")
+    db.add_medicine(m)
+    retrieved = db.get_medicine(m.medicine_id)
+    assert retrieved.date_opened is None
+    assert retrieved.days_valid_after_opening is None
+
+
+def test_open_fields_roundtrip(db):
+    """date_opened and days_valid_after_opening should survive a database round-trip."""
+    m = Medicine(
+        medicine_name="Paralen 200ml",
+        expiry_date="2027-12-31",
+        date_opened="2026-04-01",
+        days_valid_after_opening=14,
+    )
+    db.add_medicine(m)
+    retrieved = db.get_medicine(m.medicine_id)
+    assert retrieved.date_opened == "2026-04-01"
+    assert retrieved.days_valid_after_opening == 14
+
+
+def test_open_expiry_date_computed(db):
+    """open_expiry_date in to_dict should be computed as date_opened + days_valid_after_opening."""
+    m = Medicine(
+        medicine_name="Paralen 200ml",
+        expiry_date="2027-12-31",
+        date_opened="2026-04-01",
+        days_valid_after_opening=14,
+    )
+    d = m.to_dict()
+    assert d["open_expiry_date"] == "2026-04-15"
+
+
+def test_open_expiry_date_none_when_no_fields():
+    """open_expiry_date should be None when date_opened is not set."""
+    m = Medicine(medicine_name="TestDrug", expiry_date="2099-01-01")
+    d = m.to_dict()
+    assert d["open_expiry_date"] is None
+
+
+def test_status_opened_too_long():
+    """Medicine opened too long ago should have status 'opened_too_long'."""
+    from datetime import date, timedelta
+    past_date = (date.today() - timedelta(days=30)).isoformat()
+    m = Medicine(
+        medicine_name="Paralen 200ml",
+        expiry_date="2099-01-01",
+        date_opened=past_date,
+        days_valid_after_opening=14,
+    )
+    assert m.get_status() == "opened_too_long"
+
+
+def test_status_good_when_opened_within_validity():
+    """Medicine opened but within validity period should still check manufacturing expiry."""
+    from datetime import date, timedelta
+    recent = (date.today() - timedelta(days=3)).isoformat()
+    m = Medicine(
+        medicine_name="Paralen 200ml",
+        expiry_date="2099-01-01",
+        date_opened=recent,
+        days_valid_after_opening=30,
+    )
+    assert m.get_status() == "good"
+
+
+def test_status_priority_opened_too_long_over_good_manufacturing():
+    """opened_too_long takes priority over a good manufacturing expiry."""
+    from datetime import date, timedelta
+    old_open = (date.today() - timedelta(days=20)).isoformat()
+    m = Medicine(
+        medicine_name="Paralen 200ml",
+        expiry_date="2099-12-31",  # Manufacturing expiry far in future
+        date_opened=old_open,
+        days_valid_after_opening=7,
+    )
+    assert m.get_status() == "opened_too_long"
+
+
+def test_status_manufacturing_expiry_when_no_open_date():
+    """Without date_opened, status falls back to manufacturing expiry check."""
+    m = Medicine(
+        medicine_name="TestDrug",
+        expiry_date="2000-01-01",  # expired
+        date_opened=None,
+        days_valid_after_opening=None,
+    )
+    assert m.get_status() == "expired"
+
+
+def test_update_medicine_open_fields(db):
+    """update_medicine should persist date_opened and days_valid_after_opening changes."""
+    m = Medicine(medicine_name="TestDrug", expiry_date="2099-01-01")
+    db.add_medicine(m)
+
+    from datetime import date
+    m.date_opened = date.today().isoformat()
+    m.days_valid_after_opening = 28
+    db.update_medicine(m)
+
+    retrieved = db.get_medicine(m.medicine_id)
+    assert retrieved.date_opened == date.today().isoformat()
+    assert retrieved.days_valid_after_opening == 28
+
+
+def test_to_dict_includes_open_fields():
+    """to_dict should include date_opened, days_valid_after_opening, and open_expiry_date."""
+    m = Medicine(
+        medicine_name="Drug",
+        expiry_date="2099-01-01",
+        date_opened="2026-06-01",
+        days_valid_after_opening=14,
+    )
+    d = m.to_dict()
+    assert "date_opened" in d
+    assert d["date_opened"] == "2026-06-01"
+    assert "days_valid_after_opening" in d
+    assert d["days_valid_after_opening"] == 14
+    assert "open_expiry_date" in d
+    assert d["open_expiry_date"] == "2026-06-15"
+
+
+def test_from_dict_loads_open_fields():
+    """from_dict should correctly load date_opened and days_valid_after_opening."""
+    data = {
+        "medicine_name": "Drug",
+        "expiry_date": "2099-01-01",
+        "date_opened": "2026-06-01",
+        "days_valid_after_opening": 14,
+    }
+    m = Medicine.from_dict(data)
+    assert m.date_opened == "2026-06-01"
+    assert m.days_valid_after_opening == 14

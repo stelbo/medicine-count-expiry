@@ -24,6 +24,11 @@ class MedicineCountCard extends HTMLElement {
     this._config = {};
     this._selectedMedicine = null;
     this._leafletLoading = false;
+    // Opening date tracking state
+    this._showOpenDateSection = false;
+    this._pendingOpenDate = "";
+    this._pendingOpenDays = "";
+    this._extractingOpenDays = false;
     // Multi-step form state
     this._addStep = 1;
     this._labelScanning = false;
@@ -247,12 +252,98 @@ class MedicineCountCard extends HTMLElement {
   async _openDetail(medicine) {
     this._selectedMedicine = medicine;
     this._leafletLoading = false;
+    this._showOpenDateSection = false;
+    this._pendingOpenDate = medicine.date_opened || "";
+    this._pendingOpenDays = medicine.days_valid_after_opening != null ? String(medicine.days_valid_after_opening) : "";
+    this._extractingOpenDays = false;
     this.render();
   }
 
   _closeDetail() {
     this._selectedMedicine = null;
     this._leafletLoading = false;
+    this._showOpenDateSection = false;
+    this._pendingOpenDate = "";
+    this._pendingOpenDays = "";
+    this._extractingOpenDays = false;
+    this.render();
+  }
+
+  async _saveOpenDate(medicineId) {
+    const dateOpened = this._pendingOpenDate;
+    if (!dateOpened) {
+      this._error = "Please select a date opened.";
+      this.render();
+      return;
+    }
+    const days = this._pendingOpenDays ? parseInt(this._pendingOpenDays, 10) : null;
+    if (this._pendingOpenDays && (isNaN(days) || days < 1)) {
+      this._error = "Days valid after opening must be a positive number.";
+      this.render();
+      return;
+    }
+    try {
+      const updated = await this._apiFetch(`/medicines/${medicineId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date_opened: dateOpened,
+          days_valid_after_opening: days,
+        }),
+      });
+      this._selectedMedicine = updated;
+      this._medicines = this._medicines.map((m) =>
+        m.medicine_id === medicineId ? updated : m
+      );
+      this._applyFilters();
+      this._showOpenDateSection = false;
+    } catch (e) {
+      this._error = `Failed to save opening date: ${e.message}`;
+    }
+    this.render();
+  }
+
+  async _extractOpenDays(medicineId) {
+    this._extractingOpenDays = true;
+    this.render();
+    try {
+      const result = await this._apiFetch(`/medicines/${medicineId}/extract_open_days`, {
+        method: "POST",
+      });
+      if (result.days_valid_after_opening != null) {
+        this._pendingOpenDays = String(result.days_valid_after_opening);
+      } else {
+        this._error = "Claude could not determine the days valid after opening for this medicine.";
+      }
+    } catch (e) {
+      this._error = `Failed to extract days: ${e.message}`;
+    } finally {
+      this._extractingOpenDays = false;
+      this.render();
+    }
+  }
+
+  async _clearOpenDate(medicineId) {
+    try {
+      const updated = await this._apiFetch(`/medicines/${medicineId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date_opened: null,
+          days_valid_after_opening: null,
+        }),
+      });
+      this._selectedMedicine = updated;
+      this._medicines = this._medicines.map((m) =>
+        m.medicine_id === medicineId ? updated : m
+      );
+      this._applyFilters();
+      this._pendingOpenDate = "";
+      this._pendingOpenDays = "";
+      this._showOpenDateSection = false;
+    } catch (e) {
+      this._error = `Failed to clear opening date: ${e.message}`;
+    }
     this.render();
   }
 
@@ -598,9 +689,11 @@ class MedicineCountCard extends HTMLElement {
   _renderMedicineItem(m) {
     const statusClass = m.status === "expired" ? "status-expired"
       : m.status === "expiring_soon" ? "status-expiring"
+      : m.status === "opened_too_long" ? "status-opened-too-long"
       : "status-good";
     const statusLabel = m.status === "expired" ? "Expired"
       : m.status === "expiring_soon" ? "Expiring Soon"
+      : m.status === "opened_too_long" ? "Opened Too Long"
       : "Good";
     const daysInfo = this._getDaysInfo(m.expiry_date);
     const hasLeaflet = m.ai_leaflet ? ' title="Leaflet available – click for details"' : "";
@@ -618,6 +711,7 @@ class MedicineCountCard extends HTMLElement {
               <span class="meta-chip">📦 ×${m.quantity}</span>
               ${m.ai_verified ? `<span class="meta-chip ai-verified" title="AI verified (${Math.round((m.confidence_score || 0) * 100)}% confidence)">🤖 Verified</span>` : ""}
               ${m.ai_leaflet ? '<span class="meta-chip leaflet-chip">🇸🇰 Leaflet</span>' : ""}
+              ${m.date_opened ? '<span class="meta-chip opened-chip">📂 Opened</span>' : ""}
             </div>
           </div>
           <div class="medicine-expiry">
@@ -636,10 +730,12 @@ class MedicineCountCard extends HTMLElement {
     if (!m) return "";
     const statusClass = m.status === "expired" ? "status-expired"
       : m.status === "expiring_soon" ? "status-expiring"
+      : m.status === "opened_too_long" ? "status-opened-too-long"
       : "status-good";
-    const statusLabel = m.status === "expired" ? "Expired"
-      : m.status === "expiring_soon" ? "Expiring Soon"
-      : "Good";
+    const statusLabel = m.status === "expired" ? "❌ Expired"
+      : m.status === "expiring_soon" ? "⚠️ Expiring Soon"
+      : m.status === "opened_too_long" ? "⚠️ Opened Too Long"
+      : "✅ Good";
     const daysInfo = this._getDaysInfo(m.expiry_date);
 
     return `
@@ -686,6 +782,8 @@ class MedicineCountCard extends HTMLElement {
               </div>` : ""}
             </div>
 
+            ${this._renderOpeningDateSection(m)}
+
             <div class="leaflet-section">
               <div class="leaflet-header">
                 <span class="leaflet-title">🇸🇰 Príbalový leták (AI)</span>
@@ -701,6 +799,113 @@ class MedicineCountCard extends HTMLElement {
             <div></div>
             <button class="btn btn-secondary close-detail">Close</button>
           </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderOpeningDateSection(m) {
+    const openExpiry = m.open_expiry_date;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let openExpiryStatus = "";
+    let openExpiryLabel = "";
+    if (openExpiry) {
+      const exp = new Date(openExpiry);
+      exp.setHours(0, 0, 0, 0);
+      const delta = Math.round((exp - today) / 86400000);
+      if (delta < 0) {
+        openExpiryStatus = "status-opened-too-long";
+        openExpiryLabel = `⚠️ Opened Too Long (${Math.abs(delta)}d ago)`;
+      } else if (delta <= 3) {
+        openExpiryStatus = "status-expiring";
+        openExpiryLabel = delta === 0 ? "⚠️ Expires Today" : `⚠️ ${delta}d left`;
+      } else {
+        openExpiryStatus = "status-good";
+        openExpiryLabel = `✅ ${delta} days left`;
+      }
+    }
+
+    if (this._showOpenDateSection || !m.date_opened) {
+      // Show the edit / entry form
+      return `
+        <div class="opening-date-section">
+          <div class="opening-date-header">
+            <span class="opening-date-title">📅 Opening Date &amp; Validity</span>
+            ${m.date_opened && !this._showOpenDateSection ? "" :
+              m.date_opened ? `<button class="btn btn-secondary btn-sm cancel-open-date">Cancel</button>` : ""}
+          </div>
+          ${!m.date_opened && !this._showOpenDateSection ? `
+            <button class="btn btn-primary btn-sm mark-opened-btn" data-id="${this._escHtml(m.medicine_id)}">
+              ✏️ Mark as Opened
+            </button>
+          ` : `
+            <div class="opening-form">
+              <div class="opening-form-row">
+                <label class="opening-form-label">Date Opened</label>
+                <input class="form-input open-date-input" type="date"
+                  value="${this._escHtml(this._pendingOpenDate)}" />
+              </div>
+              <div class="opening-form-row">
+                <label class="opening-form-label">Valid After Opening (days)</label>
+                <div class="opening-days-row">
+                  <input class="form-input open-days-input" type="number" min="1" max="730"
+                    value="${this._escHtml(this._pendingOpenDays)}"
+                    placeholder="e.g. 14" />
+                  <button class="btn btn-secondary btn-sm extract-open-days-btn" data-id="${this._escHtml(m.medicine_id)}"
+                    ${this._extractingOpenDays ? "disabled" : ""}>
+                    ${this._extractingOpenDays
+                      ? '<div class="spinner spinner-sm"></div>'
+                      : "🤖 Extract"}
+                  </button>
+                </div>
+              </div>
+              <div class="opening-form-actions">
+                <button class="btn btn-primary btn-sm save-open-date-btn" data-id="${this._escHtml(m.medicine_id)}">
+                  Save
+                </button>
+                ${m.date_opened ? `
+                  <button class="btn btn-secondary btn-sm cancel-open-date">Cancel</button>
+                  <button class="btn btn-danger btn-sm clear-open-date-btn" data-id="${this._escHtml(m.medicine_id)}">
+                    🗑 Clear
+                  </button>
+                ` : `
+                  <button class="btn btn-secondary btn-sm cancel-open-date">Cancel</button>
+                `}
+              </div>
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    // Show existing opening date info
+    return `
+      <div class="opening-date-section">
+        <div class="opening-date-header">
+          <span class="opening-date-title">📅 Opening Date &amp; Validity</span>
+          <button class="btn btn-secondary btn-sm edit-open-date-btn" data-id="${this._escHtml(m.medicine_id)}">
+            ✏️ Edit
+          </button>
+        </div>
+        <div class="opening-info-grid">
+          <div class="opening-info-row">
+            <span class="opening-info-label">Date Opened</span>
+            <span class="opening-info-value">${this._escHtml(m.date_opened)}</span>
+          </div>
+          <div class="opening-info-row">
+            <span class="opening-info-label">Valid After Opening</span>
+            <span class="opening-info-value">${m.days_valid_after_opening != null ? m.days_valid_after_opening + " days" : "—"}</span>
+          </div>
+          ${openExpiry ? `
+          <div class="opening-info-row">
+            <span class="opening-info-label">Open Expiry Date</span>
+            <span class="opening-info-value">${this._escHtml(openExpiry)}
+              <span class="status-badge ${openExpiryStatus}">${openExpiryLabel}</span>
+            </span>
+          </div>
+          ` : ""}
         </div>
       </div>
     `;
@@ -875,6 +1080,65 @@ class MedicineCountCard extends HTMLElement {
     root.querySelector(".generate-leaflet-btn")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._generateLeaflet(e.currentTarget.dataset.id);
+    });
+
+    // Opening date: Mark as Opened button
+    root.querySelector(".mark-opened-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._showOpenDateSection = true;
+      this.render();
+    });
+
+    // Opening date: Edit button
+    root.querySelector(".edit-open-date-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const m = this._selectedMedicine;
+      this._pendingOpenDate = m.date_opened || "";
+      this._pendingOpenDays = m.days_valid_after_opening != null ? String(m.days_valid_after_opening) : "";
+      this._showOpenDateSection = true;
+      this.render();
+    });
+
+    // Opening date: Cancel button
+    root.querySelectorAll(".cancel-open-date").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._showOpenDateSection = false;
+        this.render();
+      });
+    });
+
+    // Opening date: input changes (sync state without re-render)
+    root.querySelector(".open-date-input")?.addEventListener("change", (e) => {
+      this._pendingOpenDate = e.target.value;
+    });
+    root.querySelector(".open-days-input")?.addEventListener("input", (e) => {
+      this._pendingOpenDays = e.target.value;
+    });
+
+    // Opening date: Extract days with Claude
+    root.querySelector(".extract-open-days-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._extractOpenDays(e.currentTarget.dataset.id);
+    });
+
+    // Opening date: Save
+    root.querySelector(".save-open-date-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      // Sync inputs before saving
+      const dateInput = root.querySelector(".open-date-input");
+      const daysInput = root.querySelector(".open-days-input");
+      if (dateInput) this._pendingOpenDate = dateInput.value;
+      if (daysInput) this._pendingOpenDays = daysInput.value;
+      this._saveOpenDate(e.currentTarget.dataset.id);
+    });
+
+    // Opening date: Clear
+    root.querySelector(".clear-open-date-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (confirm("Clear the opening date for this medicine?")) {
+        this._clearOpenDate(e.currentTarget.dataset.id);
+      }
     });
 
     // Legacy scan input (kept for backward compatibility)
@@ -1164,6 +1428,7 @@ class MedicineCountCard extends HTMLElement {
       .status-expired .medicine-status-bar { background: var(--color-expired); }
       .status-expiring .medicine-status-bar { background: var(--color-expiring); }
       .status-good .medicine-status-bar { background: var(--color-good); }
+      .status-opened-too-long .medicine-status-bar { background: #e65100; }
       .medicine-body {
         display: flex; align-items: center; flex: 1;
         padding: 10px 12px; gap: 8px;
@@ -1186,6 +1451,7 @@ class MedicineCountCard extends HTMLElement {
       .expiry-days.status-expired { color: var(--color-expired); }
       .expiry-days.status-expiring { color: var(--color-expiring); }
       .expiry-days.status-good { color: var(--color-good); }
+      .expiry-days.status-opened-too-long { color: #e65100; }
       .status-badge {
         display: inline-block; font-size: 0.65rem; padding: 2px 7px;
         border-radius: 12px; margin-top: 3px; font-weight: 600; text-transform: uppercase;
@@ -1193,6 +1459,7 @@ class MedicineCountCard extends HTMLElement {
       .status-badge.status-expired { background: #ffebee; color: var(--color-expired); }
       .status-badge.status-expiring { background: #fff3e0; color: var(--color-expiring); }
       .status-badge.status-good { background: #e8f5e9; color: var(--color-good); }
+      .status-badge.status-opened-too-long { background: #fff3e0; color: #e65100; }
       .delete-btn { color: #bbb; font-size: 0.95rem; }
       .delete-btn:hover { color: var(--color-expired); background: #ffebee; }
 
@@ -1358,6 +1625,37 @@ class MedicineCountCard extends HTMLElement {
       }
       .dosing-table tbody tr:last-child td { border-bottom: none; }
       .dosing-table tbody tr:hover { background: var(--secondary-background-color, #f5f5f5); }
+
+      /* Opening date section */
+      .opening-date-section {
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 8px; padding: 12px;
+        background: var(--secondary-background-color, #f9f9f9);
+        border-left: 4px solid #2196F3;
+      }
+      .opening-date-header {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 10px; flex-wrap: wrap; gap: 8px;
+      }
+      .opening-date-title { font-weight: 600; font-size: 0.95rem; }
+      .opening-form { display: flex; flex-direction: column; gap: 10px; }
+      .opening-form-row { display: flex; flex-direction: column; gap: 4px; }
+      .opening-form-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--secondary-text-color, #777); }
+      .opening-days-row { display: flex; gap: 8px; align-items: center; }
+      .opening-days-row .form-input { flex: 1; max-width: 100px; }
+      .opening-form-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+      .opening-info-grid { display: flex; flex-direction: column; gap: 8px; }
+      .opening-info-row { display: flex; gap: 10px; align-items: flex-start; font-size: 0.875rem; }
+      .opening-info-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--secondary-text-color, #777); min-width: 140px; padding-top: 2px; }
+      .opening-info-value { flex: 1; font-weight: 500; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+      /* Small button variant */
+      .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+      .btn-danger { background: #ffebee; color: #c62828; border: 1px solid #e57373; }
+      .btn-danger:hover { background: #ffcdd2; }
+
+      /* Opened meta chip */
+      .opened-chip { background: #e3f2fd; color: #1565c0; }
 
       @media (max-width: 400px) {
         .summary-grid { grid-template-columns: repeat(2, 1fr); }

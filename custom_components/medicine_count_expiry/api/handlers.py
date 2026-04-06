@@ -10,6 +10,7 @@ def register_api_views(hass) -> None:
     """Register all API views with Home Assistant."""
     from .routes import (
         MedicineDetailView,
+        MedicineExtractOpenDaysView,
         MedicineLeafletView,
         MedicineListView,
         MedicineScanExpiryView,
@@ -21,6 +22,7 @@ def register_api_views(hass) -> None:
     hass.http.register_view(MedicineListView())
     hass.http.register_view(MedicineDetailView())
     hass.http.register_view(MedicineLeafletView())
+    hass.http.register_view(MedicineExtractOpenDaysView())
     hass.http.register_view(MedicineScanLabelView())
     hass.http.register_view(MedicineScanExpiryView())
     hass.http.register_view(MedicineScanView())
