@@ -35,8 +35,8 @@ async def test_verify_medicine_success(verifier):
     }
     with patch.object(verifier, "_get_client") as mock_get_client:
         mock_client = MagicMock()
-        mock_client.messages.create.return_value = _mock_anthropic_response(
-            json.dumps(mock_response_data)
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response(json.dumps(mock_response_data))
         )
         mock_get_client.return_value = mock_client
 
@@ -56,7 +56,9 @@ async def test_verify_medicine_invalid_json(verifier):
     """verify_medicine should return failure dict on malformed JSON."""
     with patch.object(verifier, "_get_client") as mock_get_client:
         mock_client = MagicMock()
-        mock_client.messages.create.return_value = _mock_anthropic_response("not valid json {{")
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response("not valid json {{")
+        )
         mock_get_client.return_value = mock_client
 
         result = await verifier.verify_medicine("Drug", "2025-01-01")
@@ -71,7 +73,7 @@ async def test_verify_medicine_api_error(verifier):
     """verify_medicine should handle API exceptions gracefully."""
     with patch.object(verifier, "_get_client") as mock_get_client:
         mock_client = MagicMock()
-        mock_client.messages.create.side_effect = Exception("API error")
+        mock_client.messages.create = AsyncMock(side_effect=Exception("API error"))
         mock_get_client.return_value = mock_client
 
         result = await verifier.verify_medicine("Drug", "2025-01-01")
@@ -93,8 +95,8 @@ async def test_extract_from_image_success(verifier):
     }
     with patch.object(verifier, "_get_client") as mock_get_client:
         mock_client = MagicMock()
-        mock_client.messages.create.return_value = _mock_anthropic_response(
-            json.dumps(mock_response_data)
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response(json.dumps(mock_response_data))
         )
         mock_get_client.return_value = mock_client
 
@@ -110,7 +112,9 @@ async def test_extract_from_image_invalid_json(verifier):
     """extract_from_image should return None fields on malformed JSON."""
     with patch.object(verifier, "_get_client") as mock_get_client:
         mock_client = MagicMock()
-        mock_client.messages.create.return_value = _mock_anthropic_response("oops not json")
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response("oops not json")
+        )
         mock_get_client.return_value = mock_client
 
         result = await verifier.extract_from_image(b"fake_bytes")
@@ -125,7 +129,7 @@ async def test_extract_from_image_api_error(verifier):
     """extract_from_image should handle API exceptions gracefully."""
     with patch.object(verifier, "_get_client") as mock_get_client:
         mock_client = MagicMock()
-        mock_client.messages.create.side_effect = RuntimeError("Network failure")
+        mock_client.messages.create = AsyncMock(side_effect=RuntimeError("Network failure"))
         mock_get_client.return_value = mock_client
 
         result = await verifier.extract_from_image(b"fake_bytes")

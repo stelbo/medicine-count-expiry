@@ -22,6 +22,7 @@ class Medicine:
     description: str = ""
     quantity: int = 1
     location: str = "unknown"
+    unit: str = ""
     image_url: str = ""
     ai_verified: bool = False
     confidence_score: float = 0.0
@@ -37,6 +38,7 @@ class Medicine:
             "description": self.description,
             "quantity": self.quantity,
             "location": self.location,
+            "unit": self.unit,
             "image_url": self.image_url,
             "ai_verified": self.ai_verified,
             "confidence_score": self.confidence_score,
@@ -45,8 +47,13 @@ class Medicine:
             "status": self.get_status(),
         }
 
-    def get_status(self) -> str:
-        """Get the expiry status of this medicine."""
+    def get_status(self, warning_days: int = 30) -> str:
+        """Get the expiry status of this medicine.
+
+        Args:
+            warning_days: Number of days ahead to consider a medicine as
+                expiring soon.  Defaults to 30 when not supplied.
+        """
         from ..const import STATUS_EXPIRED, STATUS_EXPIRING_SOON, STATUS_GOOD, STATUS_UNKNOWN
         try:
             expiry = date.fromisoformat(self.expiry_date)
@@ -54,7 +61,7 @@ class Medicine:
             delta = (expiry - today).days
             if delta < 0:
                 return STATUS_EXPIRED
-            elif delta <= 30:
+            elif delta <= warning_days:
                 return STATUS_EXPIRING_SOON
             else:
                 return STATUS_GOOD
@@ -71,6 +78,7 @@ class Medicine:
             description=data.get("description", ""),
             quantity=data.get("quantity", 1),
             location=data.get("location", "unknown"),
+            unit=data.get("unit", ""),
             image_url=data.get("image_url", ""),
             ai_verified=data.get("ai_verified", False),
             confidence_score=data.get("confidence_score", 0.0),

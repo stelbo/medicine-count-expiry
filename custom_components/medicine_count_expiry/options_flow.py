@@ -57,12 +57,12 @@ def _get(entry: config_entries.ConfigEntry, key: str, default: Any) -> Any:
     return entry.options.get(key, entry.data.get(key, default))
 
 
-class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlow):
+class MedicineCountExpiryOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
     """Handle options flow for Medicine Count & Expiry."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        super().__init__(config_entry)
         self._data: dict[str, Any] = {}
 
     async def async_step_init(

@@ -30,8 +30,12 @@ class MedicineAlerts:
 
     async def check_and_notify(self) -> None:
         """Check for expiring/expired medicines and send notifications."""
-        expired = self._db.get_expired_medicines()
-        expiring_soon = self._db.get_expiring_medicines(self._warning_days)
+        expired = await self._hass.async_add_executor_job(
+            self._db.get_expired_medicines
+        )
+        expiring_soon = await self._hass.async_add_executor_job(
+            self._db.get_expiring_medicines, self._warning_days
+        )
 
         if expired:
             await self._send_expired_alert(expired)
@@ -64,9 +68,15 @@ class MedicineAlerts:
 
     async def send_daily_digest(self) -> None:
         """Send a daily digest of medicine status."""
-        expired = self._db.get_expired_medicines()
-        expiring_soon = self._db.get_expiring_medicines(self._warning_days)
-        all_medicines = self._db.get_all_medicines()
+        expired = await self._hass.async_add_executor_job(
+            self._db.get_expired_medicines
+        )
+        expiring_soon = await self._hass.async_add_executor_job(
+            self._db.get_expiring_medicines, self._warning_days
+        )
+        all_medicines = await self._hass.async_add_executor_job(
+            self._db.get_all_medicines
+        )
 
         lines = [
             "📋 Medicine Inventory Digest",

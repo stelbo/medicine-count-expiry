@@ -14,9 +14,10 @@ _LOGGER = logging.getLogger(__name__)
 class MedicineSearchEngine:
     """Provides search and filter functionality for medicines."""
 
-    def __init__(self, database: MedicineDatabase) -> None:
+    def __init__(self, database: MedicineDatabase, warning_days: int = 30) -> None:
         """Initialize the search engine."""
         self._db = database
+        self._warning_days = warning_days
 
     def search(
         self,
@@ -37,13 +38,16 @@ class MedicineSearchEngine:
         )
 
         if status:
-            results = [m for m in results if m.get_status() == status]
+            results = [m for m in results if m.get_status(self._warning_days) == status]
 
         return results
 
-    def get_expiring_soon(self, days: int = 30) -> List[Medicine]:
-        """Get medicines expiring within the given number of days."""
-        return self._db.get_expiring_medicines(days)
+    def get_expiring_soon(self, days: Optional[int] = None) -> List[Medicine]:
+        """Get medicines expiring within the given number of days.
+
+        Defaults to the configured warning_days when *days* is not supplied.
+        """
+        return self._db.get_expiring_medicines(days if days is not None else self._warning_days)
 
     def get_expired(self) -> List[Medicine]:
         """Get all expired medicines."""
@@ -65,7 +69,7 @@ class MedicineSearchEngine:
         good_count = 0
 
         for m in all_medicines:
-            status = m.get_status()
+            status = m.get_status(self._warning_days)
             if status == "expired":
                 expired_count += 1
             elif status == "expiring_soon":

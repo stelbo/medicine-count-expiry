@@ -12,6 +12,10 @@ def mock_hass():
     """Create a minimal mock Home Assistant instance."""
     hass = MagicMock()
     hass.services.async_call = AsyncMock()
+    # Run executor jobs synchronously so DB calls work in tests.
+    hass.async_add_executor_job = AsyncMock(
+        side_effect=lambda func, *args: func(*args)
+    )
     return hass
 
 

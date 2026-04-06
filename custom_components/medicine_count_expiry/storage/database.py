@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS medicines (
     ai_verified INTEGER DEFAULT 0,
     confidence_score REAL DEFAULT 0.0,
     added_date TEXT NOT NULL,
-    updated_date TEXT NOT NULL
+    updated_date TEXT NOT NULL,
+    unit TEXT DEFAULT ''
 )
 """
 
@@ -41,6 +42,7 @@ class MedicineDatabase:
         """Initialize the database."""
         self._db_path = db_path
         self._init_db()
+        self._migrate_db()
 
     def _init_db(self) -> None:
         """Initialize the database tables."""
@@ -50,6 +52,16 @@ class MedicineDatabase:
                 conn.execute(idx_sql)
             conn.commit()
         _LOGGER.debug("Database initialized at %s", self._db_path)
+
+    def _migrate_db(self) -> None:
+        """Apply incremental schema migrations for existing databases."""
+        with sqlite3.connect(self._db_path) as conn:
+            cursor = conn.execute("PRAGMA table_info(medicines)")
+            existing_columns = {row[1] for row in cursor.fetchall()}
+            if "unit" not in existing_columns:
+                conn.execute("ALTER TABLE medicines ADD COLUMN unit TEXT DEFAULT ''")
+                conn.commit()
+                _LOGGER.debug("Migrated database: added 'unit' column")
 
     def _row_to_medicine(self, row: tuple) -> Medicine:
         """Convert a database row to a Medicine object."""
@@ -65,6 +77,7 @@ class MedicineDatabase:
             confidence_score=row[8],
             added_date=row[9],
             updated_date=row[10],
+            unit=row[11] if len(row) > 11 else "",
         )
 
     def add_medicine(self, medicine: Medicine) -> Medicine:
@@ -73,8 +86,9 @@ class MedicineDatabase:
             conn.execute(
                 """INSERT INTO medicines
                    (medicine_id, medicine_name, expiry_date, description, quantity,
-                    location, image_url, ai_verified, confidence_score, added_date, updated_date)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    location, image_url, ai_verified, confidence_score, added_date,
+                    updated_date, unit)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     medicine.medicine_id,
                     medicine.medicine_name,
@@ -87,6 +101,7 @@ class MedicineDatabase:
                     medicine.confidence_score,
                     medicine.added_date,
                     medicine.updated_date,
+                    medicine.unit,
                 ),
             )
             conn.commit()
@@ -100,7 +115,8 @@ class MedicineDatabase:
             cursor = conn.execute(
                 """UPDATE medicines SET
                    medicine_name=?, expiry_date=?, description=?, quantity=?,
-                   location=?, image_url=?, ai_verified=?, confidence_score=?, updated_date=?
+                   location=?, image_url=?, ai_verified=?, confidence_score=?,
+                   updated_date=?, unit=?
                    WHERE medicine_id=?""",
                 (
                     medicine.medicine_name,
@@ -112,6 +128,7 @@ class MedicineDatabase:
                     int(medicine.ai_verified),
                     medicine.confidence_score,
                     medicine.updated_date,
+                    medicine.unit,
                     medicine.medicine_id,
                 ),
             )

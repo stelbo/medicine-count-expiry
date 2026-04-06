@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 
 import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -97,7 +98,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             except Exception as e:
                 _LOGGER.warning("AI verification failed: %s", e)
 
-        database.add_medicine(medicine)
+        await hass.async_add_executor_job(database.add_medicine, medicine)
         hass.bus.async_fire(
             f"{DOMAIN}_medicine_added",
             {"medicine_id": medicine.medicine_id, "medicine_name": medicine.medicine_name},
@@ -108,7 +109,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         """Handle update_medicine service call."""
         database = hass.data[DOMAIN]["database"]
         medicine_id = call.data[ATTR_MEDICINE_ID]
-        existing = database.get_medicine(medicine_id)
+        existing = await hass.async_add_executor_job(database.get_medicine, medicine_id)
         if not existing:
             _LOGGER.error("Medicine not found: %s", medicine_id)
             return
@@ -125,7 +126,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             if attr in call.data:
                 setattr(existing, attr, call.data[attr])
 
-        database.update_medicine(existing)
+        await hass.async_add_executor_job(database.update_medicine, existing)
         hass.bus.async_fire(
             f"{DOMAIN}_medicine_updated",
             {"medicine_id": medicine_id},
@@ -135,7 +136,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         """Handle delete_medicine service call."""
         database = hass.data[DOMAIN]["database"]
         medicine_id = call.data[ATTR_MEDICINE_ID]
-        deleted = database.delete_medicine(medicine_id)
+        deleted = await hass.async_add_executor_job(database.delete_medicine, medicine_id)
         if deleted:
             hass.bus.async_fire(
                 f"{DOMAIN}_medicine_deleted",
@@ -153,12 +154,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_search_medicines(call: ServiceCall) -> None:
         """Handle search_medicines service call."""
         search_engine = hass.data[DOMAIN]["search_engine"]
-        results = search_engine.search(
-            name=call.data.get("name"),
-            location=call.data.get("location"),
-            expiry_before=call.data.get("expiry_before"),
-            expiry_after=call.data.get("expiry_after"),
-            status=call.data.get("status"),
+        results = await hass.async_add_executor_job(
+            partial(
+                search_engine.search,
+                name=call.data.get("name"),
+                location=call.data.get("location"),
+                expiry_before=call.data.get("expiry_before"),
+                expiry_after=call.data.get("expiry_after"),
+                status=call.data.get("status"),
+            )
         )
         hass.bus.async_fire(
             f"{DOMAIN}_search_results",

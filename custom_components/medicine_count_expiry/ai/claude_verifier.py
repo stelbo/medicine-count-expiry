@@ -71,11 +71,11 @@ class ClaudeVerifier:
         self._client = None
 
     def _get_client(self):
-        """Get or create the Anthropic client."""
+        """Get or create the async Anthropic client."""
         if self._client is None:
             try:
                 import anthropic
-                self._client = anthropic.Anthropic(api_key=self._api_key)
+                self._client = anthropic.AsyncAnthropic(api_key=self._api_key)
             except ImportError as err:
                 raise ImportError(
                     "anthropic package is required. Install it with: pip install anthropic"
@@ -96,7 +96,7 @@ class ClaudeVerifier:
                 expiry_date=expiry_date,
                 description=description,
             )
-            message = client.messages.create(
+            message = await client.messages.create(
                 model=self._model,
                 max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}],
@@ -125,7 +125,7 @@ class ClaudeVerifier:
         try:
             client = self._get_client()
             image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
-            message = client.messages.create(
+            message = await client.messages.create(
                 model=self._model,
                 max_tokens=1024,
                 messages=[

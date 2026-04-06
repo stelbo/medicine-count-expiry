@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from .const import DEFAULT_EXPIRY_WARNING_DAYS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,11 +26,12 @@ async def async_setup_entry(
         return
 
     search_engine = hass.data[DOMAIN]["search_engine"]
+    warning_days: int = hass.data[DOMAIN].get("expiry_warning_days", DEFAULT_EXPIRY_WARNING_DAYS)
 
     entities = [
-        MedicineTotalCountSensor(hass, search_engine),
-        MedicineExpiredCountSensor(hass, search_engine),
-        MedicineExpiringSoonCountSensor(hass, search_engine),
+        MedicineTotalCountSensor(search_engine),
+        MedicineExpiredCountSensor(search_engine),
+        MedicineExpiringSoonCountSensor(search_engine, warning_days),
     ]
     async_add_entities(entities, update_before_add=True)
 
@@ -41,9 +42,8 @@ class MedicineBaseSensor(SensorEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_should_poll = True
 
-    def __init__(self, hass: HomeAssistant, search_engine) -> None:
+    def __init__(self, search_engine) -> None:
         """Initialize the sensor."""
-        self._hass = hass
         self._search_engine = search_engine
         self._attr_native_value = 0
         self._extra_attrs: dict[str, Any] = {}
@@ -56,9 +56,11 @@ class MedicineBaseSensor(SensorEntity):
     async def async_added_to_hass(self) -> None:
         """Register event listeners when added to HA."""
         for event_suffix in ("medicine_added", "medicine_updated", "medicine_deleted"):
-            self.hass.bus.async_listen(
-                f"{DOMAIN}_{event_suffix}",
-                self._handle_medicine_change,
+            self.async_on_remove(
+                self.hass.bus.async_listen(
+                    f"{DOMAIN}_{event_suffix}",
+                    self._handle_medicine_change,
+                )
             )
 
     @callback
@@ -127,10 +129,15 @@ class MedicineExpiringSoonCountSensor(MedicineBaseSensor):
     _attr_icon = "mdi:pill-multiple"
     _attr_native_unit_of_measurement = "medicines"
 
+    def __init__(self, search_engine, warning_days: int = DEFAULT_EXPIRY_WARNING_DAYS) -> None:
+        """Initialize the expiring-soon sensor."""
+        super().__init__(search_engine)
+        self._warning_days = warning_days
+
     def update(self) -> None:
         """Update sensor state."""
         if self._search_engine:
-            expiring_soon = self._search_engine.get_expiring_soon()
+            expiring_soon = self._search_engine.get_expiring_soon(self._warning_days)
             self._attr_native_value = len(expiring_soon)
             self._extra_attrs = {
                 "medicines": [
