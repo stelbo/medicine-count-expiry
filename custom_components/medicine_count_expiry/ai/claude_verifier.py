@@ -35,6 +35,22 @@ Verify that:
 
 Respond ONLY with the JSON object, no other text."""
 
+GENERATE_LEAFLET_PROMPT = """Ty si pomocný asistent pre príbalové letáky liekov. Analyzuj názov tohto lieku a vytvor stručné zhrnutie príbalového letáka v slovenskom jazyku.
+
+Názov lieku: {medicine_name}
+
+Odpovedz VÝLUČNE vo formáte JSON s nasledujúcou štruktúrou (všetky hodnoty musia byť v slovenčine):
+{{
+    "pouzitie": "Krátky popis použitia lieku (1-2 vety)",
+    "davkovanie": "Bežné dávkovanie pre dospelých (1-2 vety)",
+    "vedlajsie_ucinky": "Najčastejšie vedľajšie účinky (1-2 vety)",
+    "varovania": "Hlavné varovania a kontraindikácie (1-2 vety)",
+    "skladovanie": "Podmienky skladovania (1 veta)",
+    "interakcie": "Dôležité liekové interakcie alebo null ak nie sú relevantné"
+}}
+
+Odpovedz IBA s JSON objektom, bez ďalšieho textu."""
+
 EXTRACT_FROM_IMAGE_PROMPT = """You are a pharmacy assistant. Analyze this medicine label image and extract information.
 
 Please respond with a JSON object containing:
@@ -118,6 +134,43 @@ class ClaudeVerifier:
                 "verified": False,
                 "confidence_score": 0.0,
                 "notes": f"Verification error: {e}",
+            }
+
+    async def generate_leaflet(self, medicine_name: str) -> dict[str, Any]:
+        """Generate a Slovak package leaflet summary for a medicine using Claude."""
+        try:
+            client = self._get_client()
+            prompt = GENERATE_LEAFLET_PROMPT.format(medicine_name=medicine_name)
+            message = await client.messages.create(
+                model=self._model,
+                max_tokens=1024,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            response_text = message.content[0].text.strip()
+            result = json.loads(response_text)
+            _LOGGER.debug("Claude leaflet result for %s: %s", medicine_name, result)
+            return result
+        except json.JSONDecodeError as e:
+            _LOGGER.error("Failed to parse Claude leaflet response: %s", e)
+            return {
+                "pouzitie": None,
+                "davkovanie": None,
+                "vedlajsie_ucinky": None,
+                "varovania": None,
+                "skladovanie": None,
+                "interakcie": None,
+                "error": f"Failed to parse AI response: {e}",
+            }
+        except Exception as e:
+            _LOGGER.error("Claude leaflet generation error: %s", e)
+            return {
+                "pouzitie": None,
+                "davkovanie": None,
+                "vedlajsie_ucinky": None,
+                "varovania": None,
+                "skladovanie": None,
+                "interakcie": None,
+                "error": f"Leaflet generation error: {e}",
             }
 
     async def extract_from_image(self, image_data: bytes, media_type: str = "image/jpeg") -> dict[str, Any]:

@@ -162,3 +162,59 @@ def test_client_is_cached(verifier):
         c1 = verifier._get_client()
         c2 = verifier._get_client()
         assert c1 is c2
+
+
+@pytest.mark.asyncio
+async def test_generate_leaflet_success(verifier):
+    """generate_leaflet should parse Claude JSON response and return Slovak leaflet sections."""
+    mock_response_data = {
+        "pouzitie": "Úľava od miernej až stredne ťažkej bolesti a horúčky.",
+        "davkovanie": "500-1000 mg každých 4-6 hodín podľa potreby.",
+        "vedlajsie_ucinky": "Vzácne: nausea, vyrážka.",
+        "varovania": "Neprekonať maximálnu dennú dávku 4000 mg.",
+        "skladovanie": "Chladné, suché miesto. Mimo dosahu detí.",
+        "interakcie": "Warfarin – možné liekové interakcie.",
+    }
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response(json.dumps(mock_response_data))
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.generate_leaflet("Paracetamol 500mg")
+
+    assert result["pouzitie"] is not None
+    assert result["davkovanie"] is not None
+    assert result["skladovanie"] is not None
+    assert "error" not in result
+
+
+@pytest.mark.asyncio
+async def test_generate_leaflet_invalid_json(verifier):
+    """generate_leaflet should return error dict on malformed JSON."""
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response("not valid json")
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.generate_leaflet("Ibuprofen 200mg")
+
+    assert "error" in result
+    assert result["pouzitie"] is None
+
+
+@pytest.mark.asyncio
+async def test_generate_leaflet_api_error(verifier):
+    """generate_leaflet should handle API exceptions gracefully."""
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(side_effect=RuntimeError("Network failure"))
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.generate_leaflet("Aspirin 100mg")
+
+    assert "error" in result
+    assert result["pouzitie"] is None

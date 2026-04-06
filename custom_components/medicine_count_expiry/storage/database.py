@@ -1,6 +1,7 @@
 """Database layer for Medicine Count & Expiry integration."""
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 from datetime import datetime
@@ -23,7 +24,9 @@ CREATE TABLE IF NOT EXISTS medicines (
     ai_verified INTEGER DEFAULT 0,
     confidence_score REAL DEFAULT 0.0,
     added_date TEXT NOT NULL,
-    updated_date TEXT NOT NULL
+    updated_date TEXT NOT NULL,
+    ai_leaflet TEXT DEFAULT NULL,
+    ai_leaflet_generated_at TEXT DEFAULT NULL
 )
 """
 
@@ -31,6 +34,12 @@ CREATE_INDEX_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_medicine_name ON medicines(medicine_name)",
     "CREATE INDEX IF NOT EXISTS idx_expiry_date ON medicines(expiry_date)",
     "CREATE INDEX IF NOT EXISTS idx_location ON medicines(location)",
+]
+
+# Migration statements to add new columns to existing databases
+_MIGRATE_SQL = [
+    "ALTER TABLE medicines ADD COLUMN ai_leaflet TEXT DEFAULT NULL",
+    "ALTER TABLE medicines ADD COLUMN ai_leaflet_generated_at TEXT DEFAULT NULL",
 ]
 
 
@@ -48,11 +57,24 @@ class MedicineDatabase:
             conn.execute(CREATE_TABLE_SQL)
             for idx_sql in CREATE_INDEX_SQL:
                 conn.execute(idx_sql)
+            # Apply migrations (idempotent – ignored if column already exists)
+            for sql in _MIGRATE_SQL:
+                try:
+                    conn.execute(sql)
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
             conn.commit()
         _LOGGER.debug("Database initialized at %s", self._db_path)
 
     def _row_to_medicine(self, row: tuple) -> Medicine:
         """Convert a database row to a Medicine object."""
+        ai_leaflet = None
+        if len(row) > 11 and row[11] is not None:
+            try:
+                ai_leaflet = json.loads(row[11])
+            except (ValueError, TypeError):
+                ai_leaflet = None
+        ai_leaflet_generated_at = row[12] if len(row) > 12 else None
         return Medicine(
             medicine_id=row[0],
             medicine_name=row[1],
@@ -65,16 +87,20 @@ class MedicineDatabase:
             confidence_score=row[8],
             added_date=row[9],
             updated_date=row[10],
+            ai_leaflet=ai_leaflet,
+            ai_leaflet_generated_at=ai_leaflet_generated_at,
         )
 
     def add_medicine(self, medicine: Medicine) -> Medicine:
         """Add a new medicine to the database."""
+        ai_leaflet_json = json.dumps(medicine.ai_leaflet) if medicine.ai_leaflet is not None else None
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
                 """INSERT INTO medicines
                    (medicine_id, medicine_name, expiry_date, description, quantity,
-                    location, image_url, ai_verified, confidence_score, added_date, updated_date)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    location, image_url, ai_verified, confidence_score, added_date, updated_date,
+                    ai_leaflet, ai_leaflet_generated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     medicine.medicine_id,
                     medicine.medicine_name,
@@ -87,6 +113,8 @@ class MedicineDatabase:
                     medicine.confidence_score,
                     medicine.added_date,
                     medicine.updated_date,
+                    ai_leaflet_json,
+                    medicine.ai_leaflet_generated_at,
                 ),
             )
             conn.commit()
@@ -96,11 +124,13 @@ class MedicineDatabase:
     def update_medicine(self, medicine: Medicine) -> Optional[Medicine]:
         """Update an existing medicine."""
         medicine.updated_date = datetime.now().isoformat()
+        ai_leaflet_json = json.dumps(medicine.ai_leaflet) if medicine.ai_leaflet is not None else None
         with sqlite3.connect(self._db_path) as conn:
             cursor = conn.execute(
                 """UPDATE medicines SET
                    medicine_name=?, expiry_date=?, description=?, quantity=?,
-                   location=?, image_url=?, ai_verified=?, confidence_score=?, updated_date=?
+                   location=?, image_url=?, ai_verified=?, confidence_score=?, updated_date=?,
+                   ai_leaflet=?, ai_leaflet_generated_at=?
                    WHERE medicine_id=?""",
                 (
                     medicine.medicine_name,
@@ -112,6 +142,8 @@ class MedicineDatabase:
                     int(medicine.ai_verified),
                     medicine.confidence_score,
                     medicine.updated_date,
+                    ai_leaflet_json,
+                    medicine.ai_leaflet_generated_at,
                     medicine.medicine_id,
                 ),
             )
@@ -120,6 +152,20 @@ class MedicineDatabase:
                 return None
         _LOGGER.info("Updated medicine: %s", medicine.medicine_name)
         return medicine
+
+    def save_leaflet(self, medicine_id: str, leaflet: dict, generated_at: str) -> Optional[Medicine]:
+        """Save a generated leaflet for a medicine and return the updated record."""
+        ai_leaflet_json = json.dumps(leaflet)
+        with sqlite3.connect(self._db_path) as conn:
+            cursor = conn.execute(
+                "UPDATE medicines SET ai_leaflet=?, ai_leaflet_generated_at=? WHERE medicine_id=?",
+                (ai_leaflet_json, generated_at, medicine_id),
+            )
+            conn.commit()
+            if cursor.rowcount == 0:
+                return None
+        _LOGGER.info("Saved leaflet for medicine ID: %s", medicine_id)
+        return self.get_medicine(medicine_id)
 
     def delete_medicine(self, medicine_id: str) -> bool:
         """Delete a medicine by ID."""
