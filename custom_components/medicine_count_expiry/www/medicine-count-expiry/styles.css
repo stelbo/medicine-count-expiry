@@ -1,0 +1,78 @@
+:host {
+  --medicine-card-background: var(--ha-card-background, white);
+  --medicine-card-padding: 16px;
+  --medicine-text-color: var(--primary-text-color);
+  --medicine-secondary-text-color: var(--secondary-text-color);
+}
+
+.medicine-card {
+  background: var(--medicine-card-background);
+  padding: var(--medicine-card-padding);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.medicine-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.medicine-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--divider-color);
+}
+
+.medicine-item:last-child {
+  border-bottom: none;
+}
+
+.medicine-name {
+  color: var(--medicine-text-color);
+  font-weight: 500;
+  margin: 0;
+}
+
+.medicine-expiry {
+  color: var(--medicine-secondary-text-color);
+  font-size: 0.9em;
+  margin: 4px 0 0 0;
+}
+
+.medicine-expired {
+  color: #d32f2f;
+  font-weight: 500;
+}
+
+.medicine-expiring-soon {
+  color: #f57c00;
+  font-weight: 500;
+}
+
+.medicine-add-button {
+  margin-top: 16px;
+  padding: 8px 16px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1em;
+}
+
+.medicine-add-button:hover {
+  background: var(--primary-color-dark, #1976d2);
+}
+
+.medicine-empty {
+  text-align: center;
+  color: var(--medicine-secondary-text-color);
+  padding: 24px 16px;
+}
+
+.medicine-header {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: var(--medicine-text-color);
+  margin-bottom: 12px;
+}
