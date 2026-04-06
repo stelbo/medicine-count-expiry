@@ -1,0 +1,5 @@
+---
+name: "1.0.29"
+draft: false
+tag_name: "1.0.29"
+release_notes: "## What's Changed\n* Add exponential backoff retry logic for Claude API 429/529 errors by @Copilot in #37\n  - Automatically retries on API overload (Error 529)\n  - Automatically retries on rate limit (Error 429)\n  - 3 retry attempts with exponential backoff (1s, 2s, 4s, max 30s)\n  - Jitter added to prevent thundering herd\n  - Logs each retry attempt\n  - Works for all Claude API calls (extract_label_info, extract_from_image, generate_leaflet, verify_medicine)\n\n**Full Changelog**: https://github.com/stelbo/medicine-count-expiry/compare/1.0.28...1.0.29","created_at": "2026-04-06T21:45:07Z","author": {"name": "stelbo","email": "your-email@example.com"}}
