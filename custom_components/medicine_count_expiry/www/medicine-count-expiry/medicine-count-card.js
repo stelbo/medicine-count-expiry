@@ -24,6 +24,12 @@ class MedicineCountCard extends HTMLElement {
     this._config = {};
     this._selectedMedicine = null;
     this._leafletLoading = false;
+    // Multi-step form state
+    this._addStep = 1;
+    this._labelScanning = false;
+    this._expiryScanning = false;
+    this._expiryInputMethod = "manual";
+    this._formData = {};
   }
 
   setConfig(config) {
@@ -115,6 +121,11 @@ class MedicineCountCard extends HTMLElement {
       this._showAddForm = false;
       this._scanResult = null;
       this._scanCount = 0;
+      this._addStep = 1;
+      this._labelScanning = false;
+      this._expiryScanning = false;
+      this._expiryInputMethod = "manual";
+      this._formData = {};
       await this._fetchData();
     } catch (e) {
       this._error = `Failed to add: ${e.message}`;
@@ -155,6 +166,54 @@ class MedicineCountCard extends HTMLElement {
       this._error = `Scan failed: ${e.message}`;
     } finally {
       this._loading = false;
+      this.render();
+    }
+  }
+
+  async _scanLabelImage(file) {
+    this._labelScanning = true;
+    this._error = null;
+    this.render();
+    try {
+      const result = await this._apiFetch("/scan/label", {
+        method: "POST",
+        headers: { "Content-Type": file.type || "image/jpeg" },
+        body: file,
+      });
+      this._formData = {
+        ...this._formData,
+        medicine_name: result.medicine_name || this._formData.medicine_name || "",
+        description: result.description || this._formData.description || "",
+        labelConfidence: result.confidence || {},
+      };
+    } catch (e) {
+      this._error = `Label scan failed: ${e.message}`;
+    } finally {
+      this._labelScanning = false;
+      this.render();
+    }
+  }
+
+  async _scanExpiryImage(file) {
+    this._expiryScanning = true;
+    this._error = null;
+    this.render();
+    try {
+      const result = await this._apiFetch("/scan/expiry", {
+        method: "POST",
+        headers: { "Content-Type": file.type || "image/jpeg" },
+        body: file,
+      });
+      this._formData = {
+        ...this._formData,
+        expiry_date: result.expiry_date || this._formData.expiry_date || "",
+        rawExpiryText: result.raw_expiry_text || "",
+        expiryConfidence: result.confidence || {},
+      };
+    } catch (e) {
+      this._error = `Expiry scan failed: ${e.message}`;
+    } finally {
+      this._expiryScanning = false;
       this.render();
     }
   }
@@ -248,8 +307,8 @@ class MedicineCountCard extends HTMLElement {
   }
 
   _renderModal() {
-    const sr = this._scanResult || {};
-    const hasScanned = this._scanCount > 0;
+    const stepTitles = ["Scan Medicine Label", "Enter Expiry Date", "Other Details"];
+    const title = stepTitles[this._addStep - 1] || "Add Medicine";
     return `
       <div class="modal-backdrop">
         <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -258,67 +317,169 @@ class MedicineCountCard extends HTMLElement {
             <button class="icon-btn cancel-add" title="Close dialog">✕</button>
           </div>
           <div class="modal-body">
-            ${this._renderScanNotice(hasScanned, sr)}
-            <div class="form-grid">
-              <label class="form-label">
-                Name <span class="required">*</span>
-                <input class="form-input" name="medicine_name" type="text" required
-                  value="${this._escHtml(sr.medicine_name || "")}" placeholder="e.g. Paracetamol 500mg" />
-              </label>
-              <label class="form-label">
-                Expiry Date <span class="required">*</span>
-                <input class="form-input" name="expiry_date" type="date" required
-                  value="${this._escHtml(sr.expiry_date || "")}" />
-              </label>
-              <label class="form-label">
-                Description
-                <input class="form-input" name="description" type="text"
-                  value="${this._escHtml(sr.description || "")}" placeholder="e.g. 500mg tablets" />
-              </label>
-              <label class="form-label">
-                Quantity
-                <input class="form-input" name="quantity" type="number" min="1" value="1" />
-              </label>
-              <label class="form-label">
-                Location
-                <input class="form-input" name="location" type="text"
-                  value="" placeholder="e.g. bathroom" list="location-list" />
-                <datalist id="location-list">
-                  <option value="bathroom"/>
-                  <option value="kitchen"/>
-                  <option value="bedroom"/>
-                  <option value="living room"/>
-                  <option value="other"/>
-                </datalist>
-              </label>
-              <label class="form-label">
-                Unit
-                <input class="form-input" name="unit" type="text"
-                  value="" placeholder="e.g. tablets" list="unit-list" />
-                <datalist id="unit-list">
-                  <option value="tablets"/>
-                  <option value="pills"/>
-                  <option value="ml"/>
-                  <option value="mg"/>
-                  <option value="capsules"/>
-                  <option value="drops"/>
-                  <option value="units"/>
-                </datalist>
-              </label>
-            </div>
+            ${this._renderStepProgress()}
+            <div class="step-title">${title}</div>
+            ${this._addStep === 1 ? this._renderStep1() : ""}
+            ${this._addStep === 2 ? this._renderStep2() : ""}
+            ${this._addStep === 3 ? this._renderStep3() : ""}
           </div>
           <div class="modal-footer">
-            <div class="scan-actions">
-              <label class="scan-btn-label" title="${hasScanned ? "Scan again to improve results" : "Scan medicine label with camera"}">
-                ${hasScanned ? "📷 Scan Again" : "📷 Scan Label"}
-                <input class="scan-input" type="file" accept="image/*" capture="environment" />
-              </label>
-            </div>
-            <div class="modal-actions">
-              <button class="btn btn-secondary cancel-add">Cancel</button>
-              <button class="btn btn-primary submit-add">Add Medicine</button>
+            <div class="modal-nav">
+              ${this._addStep > 1 ? '<button class="btn btn-secondary step-back-btn">← Back</button>' : '<div></div>'}
+              ${this._addStep < 3
+                ? '<button class="btn btn-primary step-next-btn">Next Step →</button>'
+                : '<button class="btn btn-primary submit-add">Add Medicine</button>'}
             </div>
           </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderStepProgress() {
+    const labels = ["Label", "Expiry", "Details"];
+    return `
+      <div class="step-progress">
+        ${labels.map((label, i) => {
+          const step = i + 1;
+          const cls = step < this._addStep ? "done" : step === this._addStep ? "active" : "";
+          return `
+            ${i > 0 ? `<div class="step-line ${step <= this._addStep ? 'active' : ''}"></div>` : ""}
+            <div class="step-dot ${cls}">
+              <span>${step < this._addStep ? "✓" : step}</span>
+              <div class="step-dot-label">${label}</div>
+            </div>`;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  _renderStep1() {
+    const fd = this._formData;
+    const nameConf = Math.round(((fd.labelConfidence || {}).medicine_name || 0) * 100);
+    const descConf = Math.round(((fd.labelConfidence || {}).description || 0) * 100);
+    const hasLabelScan = !!(fd.medicine_name || fd.description);
+
+    return `
+      <div class="step-content">
+        <p class="step-instruction">Take a photo of the medicine box/label. Claude will extract the name and description automatically.</p>
+        <div class="scan-row">
+          <label class="scan-btn-label${this._labelScanning ? " loading" : ""}">
+            ${this._labelScanning
+              ? '<div class="spinner spinner-sm"></div> Scanning…'
+              : hasLabelScan ? "📷 Re-scan Label" : "📷 Scan Label"}
+            <input class="label-scan-input" type="file" accept="image/*" capture="environment"
+              ${this._labelScanning ? "disabled" : ""} />
+          </label>
+        </div>
+        ${hasLabelScan ? `<div class="scan-notice">✅ Extracted from label scan</div>` : ""}
+        <div class="form-grid">
+          <label class="form-label">
+            Medicine Name <span class="required">*</span>
+            <input class="form-input" name="medicine_name" type="text"
+              value="${this._escHtml(fd.medicine_name || "")}"
+              placeholder="Scan label to extract name" />
+            ${nameConf > 0 ? `<span class="conf-indicator${nameConf < 70 ? " conf-low" : " conf-ok"}">${nameConf}% confidence${nameConf < 70 ? " ⚠️" : " ✓"}</span>` : ""}
+          </label>
+          <label class="form-label">
+            Description
+            <input class="form-input" name="description" type="text"
+              value="${this._escHtml(fd.description || "")}"
+              placeholder="e.g. 500mg tablets" />
+            ${descConf > 0 ? `<span class="conf-indicator${descConf < 70 ? " conf-low" : " conf-ok"}">${descConf}% confidence${descConf < 70 ? " ⚠️" : " ✓"}</span>` : ""}
+          </label>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderStep2() {
+    const fd = this._formData;
+    const expiryConf = Math.round(((fd.expiryConfidence || {}).expiry_date || 0) * 100);
+    const isScanMode = this._expiryInputMethod === "scan";
+
+    return `
+      <div class="step-content">
+        <p class="step-instruction">Enter the expiry date for <strong>${this._escHtml(fd.medicine_name || "this medicine")}</strong>.</p>
+        <div class="expiry-tabs">
+          <button class="expiry-tab${!isScanMode ? " active" : ""}" data-method="manual">📅 Enter Manually</button>
+          <button class="expiry-tab${isScanMode ? " active" : ""}" data-method="scan">📷 Scan Expiry</button>
+        </div>
+        ${!isScanMode ? `
+          <div class="form-grid">
+            <label class="form-label">
+              Expiry Date <span class="required">*</span>
+              <input class="form-input" name="expiry_date" type="date"
+                value="${this._escHtml(fd.expiry_date || "")}" />
+            </label>
+          </div>
+        ` : `
+          <div class="scan-row">
+            <label class="scan-btn-label${this._expiryScanning ? " loading" : ""}">
+              ${this._expiryScanning
+                ? '<div class="spinner spinner-sm"></div> Scanning…'
+                : fd.expiry_date ? "📷 Re-scan Expiry" : "📷 Scan Expiry Date"}
+              <input class="expiry-scan-input" type="file" accept="image/*" capture="environment"
+                ${this._expiryScanning ? "disabled" : ""} />
+            </label>
+          </div>
+          ${fd.expiry_date ? `
+            <div class="scan-notice">
+              ✅ Extracted: <strong>${this._escHtml(fd.expiry_date)}</strong>
+              ${fd.rawExpiryText ? ` <span class="raw-text">(${this._escHtml(fd.rawExpiryText)})</span>` : ""}
+              ${expiryConf > 0 ? `<span class="conf-indicator${expiryConf < 70 ? " conf-low" : " conf-ok"}">${expiryConf}%${expiryConf < 70 ? " ⚠️" : " ✓"}</span>` : ""}
+            </div>
+            <div class="form-grid">
+              <label class="form-label">
+                Confirm Expiry Date <span class="required">*</span>
+                <input class="form-input" name="expiry_date" type="date"
+                  value="${this._escHtml(fd.expiry_date || "")}" />
+              </label>
+            </div>
+          ` : `<p class="step-hint">📷 Take a close-up photo of the expiry date on the medicine box.</p>`}
+        `}
+      </div>
+    `;
+  }
+
+  _renderStep3() {
+    return `
+      <div class="step-content">
+        <p class="step-instruction">Optionally add location, quantity and unit information.</p>
+        <div class="form-grid">
+          <label class="form-label">
+            Location
+            <input class="form-input" name="location" type="text"
+              value="${this._escHtml(this._formData.location || "")}"
+              placeholder="e.g. bathroom" list="location-list" />
+            <datalist id="location-list">
+              <option value="bathroom"/>
+              <option value="kitchen"/>
+              <option value="bedroom"/>
+              <option value="living room"/>
+              <option value="other"/>
+            </datalist>
+          </label>
+          <label class="form-label">
+            Quantity
+            <input class="form-input" name="quantity" type="number" min="1"
+              value="${parseInt(this._formData.quantity || "1", 10) || 1}" />
+          </label>
+          <label class="form-label">
+            Unit
+            <input class="form-input" name="unit" type="text"
+              value="${this._escHtml(this._formData.unit || "")}"
+              placeholder="e.g. tablets" list="unit-list" />
+            <datalist id="unit-list">
+              <option value="tablets"/>
+              <option value="pills"/>
+              <option value="ml"/>
+              <option value="mg"/>
+              <option value="capsules"/>
+              <option value="drops"/>
+              <option value="units"/>
+            </datalist>
+          </label>
         </div>
       </div>
     `;
@@ -584,6 +745,11 @@ class MedicineCountCard extends HTMLElement {
       this._showAddForm = !this._showAddForm;
       this._scanResult = null;
       this._scanCount = 0;
+      this._addStep = 1;
+      this._labelScanning = false;
+      this._expiryScanning = false;
+      this._expiryInputMethod = "manual";
+      this._formData = {};
       this.render();
     });
     root.querySelectorAll(".cancel-add").forEach((btn) => {
@@ -591,6 +757,11 @@ class MedicineCountCard extends HTMLElement {
         this._showAddForm = false;
         this._scanResult = null;
         this._scanCount = 0;
+        this._addStep = 1;
+        this._labelScanning = false;
+        this._expiryScanning = false;
+        this._expiryInputMethod = "manual";
+        this._formData = {};
         this.render();
       });
     });
@@ -658,19 +829,81 @@ class MedicineCountCard extends HTMLElement {
       this._generateLeaflet(e.currentTarget.dataset.id);
     });
 
-    // Scan image
+    // Legacy scan input (kept for backward compatibility)
     root.querySelector(".scan-input")?.addEventListener("change", (e) => {
       const file = e.target.files[0];
       if (file) this._scanImage(file);
     });
 
-    // Submit add form
-    root.querySelector(".submit-add")?.addEventListener("click", () => {
-      const form = root.querySelector(".modal-body") || root.querySelector(".add-form");
-      const getValue = (name) => form.querySelector(`[name="${name}"]`)?.value?.trim() || "";
+    // Step 1: label scan
+    root.querySelector(".label-scan-input")?.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) this._scanLabelImage(file);
+    });
 
-      const name = getValue("medicine_name");
-      const expiry = getValue("expiry_date");
+    // Step 2: expiry scan
+    root.querySelector(".expiry-scan-input")?.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) this._scanExpiryImage(file);
+    });
+
+    // Step 2: expiry method tabs
+    root.querySelectorAll(".expiry-tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this._expiryInputMethod = btn.dataset.method;
+        this.render();
+      });
+    });
+
+    // Step navigation: Next
+    root.querySelector(".step-next-btn")?.addEventListener("click", () => {
+      const getValue = (name) =>
+        root.querySelector(`[name="${name}"]`)?.value?.trim() || "";
+
+      if (this._addStep === 1) {
+        const name = getValue("medicine_name");
+        if (!name) {
+          this._error = "Medicine name is required. Please scan the label or enter a name.";
+          this.render();
+          return;
+        }
+        this._formData = {
+          ...this._formData,
+          medicine_name: name,
+          description: getValue("description"),
+        };
+      } else if (this._addStep === 2) {
+        const expiry = getValue("expiry_date");
+        if (!expiry) {
+          this._error = "Expiry date is required.";
+          this.render();
+          return;
+        }
+        this._formData = {
+          ...this._formData,
+          expiry_date: expiry,
+        };
+      }
+
+      this._addStep++;
+      this._error = null;
+      this.render();
+    });
+
+    // Step navigation: Back
+    root.querySelector(".step-back-btn")?.addEventListener("click", () => {
+      this._addStep = Math.max(1, this._addStep - 1);
+      this._error = null;
+      this.render();
+    });
+
+    // Submit add form (step 3)
+    root.querySelector(".submit-add")?.addEventListener("click", () => {
+      const getValue = (name) =>
+        root.querySelector(`[name="${name}"]`)?.value?.trim() || "";
+
+      const name = this._formData.medicine_name || "";
+      const expiry = this._formData.expiry_date || "";
       if (!name || !expiry) {
         this._error = "Medicine name and expiry date are required.";
         this.render();
@@ -680,10 +913,12 @@ class MedicineCountCard extends HTMLElement {
       this._addMedicine({
         medicine_name: name,
         expiry_date: expiry,
-        description: getValue("description"),
-        quantity: parseInt(getValue("quantity") || "1", 10),
+        description: this._formData.description || "",
+        quantity: parseInt(getValue("quantity") || "1", 10) || 1,
         location: getValue("location") || "unknown",
-        unit: getValue("unit") || "tablets",
+        unit: getValue("unit") || "",
+        ai_verified: !!(this._formData.labelConfidence && this._formData.labelConfidence.medicine_name),
+        confidence_score: (this._formData.labelConfidence || {}).medicine_name || 0.0,
       });
     });
   }
@@ -957,6 +1192,79 @@ class MedicineCountCard extends HTMLElement {
 
       /* Scan actions */
       .scan-actions { display: flex; gap: 8px; align-items: center; }
+      .scan-row { margin-bottom: 12px; }
+
+      /* Multi-step form */
+      .step-progress {
+        display: flex; align-items: flex-start; justify-content: center;
+        margin-bottom: 20px; padding: 4px 0;
+      }
+      .step-dot {
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+        position: relative;
+      }
+      .step-dot > span {
+        width: 28px; height: 28px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.8rem; font-weight: 700;
+        background: var(--secondary-background-color, #e0e0e0);
+        color: var(--secondary-text-color, #777);
+        border: 2px solid var(--divider-color, #ccc);
+        transition: background 0.2s, border-color 0.2s;
+      }
+      .step-dot.active > span {
+        background: var(--primary-color, #03a9f4); color: #fff;
+        border-color: var(--primary-color, #03a9f4);
+      }
+      .step-dot.done > span {
+        background: #43a047; color: #fff; border-color: #43a047;
+      }
+      .step-dot-label {
+        font-size: 0.65rem; color: var(--secondary-text-color, #777);
+        text-transform: uppercase; letter-spacing: 0.04em;
+      }
+      .step-line {
+        flex: 1; height: 2px; margin: 13px 4px 0;
+        background: var(--divider-color, #e0e0e0); min-width: 30px;
+        transition: background 0.2s;
+      }
+      .step-line.active { background: var(--primary-color, #03a9f4); }
+      .step-title {
+        font-weight: 600; font-size: 0.95rem; margin-bottom: 8px;
+        color: var(--primary-text-color, #212121);
+      }
+      .step-content { display: flex; flex-direction: column; gap: 10px; }
+      .step-instruction { margin: 0 0 8px; font-size: 0.85rem; color: var(--secondary-text-color, #666); }
+      .step-hint { margin: 8px 0; font-size: 0.85rem; color: var(--secondary-text-color, #777); }
+      .scan-btn-label.loading { opacity: 0.7; pointer-events: none; }
+      .conf-indicator {
+        font-size: 0.75rem; margin-top: 3px;
+        padding: 2px 6px; border-radius: 10px; display: inline-block;
+      }
+      .conf-ok { background: #e8f5e9; color: #2e7d32; }
+      .conf-low { background: #fff3e0; color: #e65100; }
+      .raw-text { font-size: 0.78rem; color: var(--secondary-text-color, #888); }
+
+      /* Expiry tabs */
+      .expiry-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+      .expiry-tab {
+        flex: 1; padding: 8px 12px; border: 1px solid var(--divider-color, #ccc);
+        border-radius: 6px; background: var(--card-background-color, #fff);
+        color: var(--secondary-text-color, #555); cursor: pointer;
+        font-size: 0.85rem; transition: background 0.15s, border-color 0.15s;
+      }
+      .expiry-tab.active {
+        background: var(--primary-color, #03a9f4); color: #fff;
+        border-color: var(--primary-color, #03a9f4); font-weight: 600;
+      }
+      .expiry-tab:hover:not(.active) { background: var(--secondary-background-color, #f5f5f5); }
+
+      /* Modal navigation (step form) */
+      .modal-nav {
+        display: flex; align-items: center; justify-content: space-between;
+        width: 100%;
+      }
 
       @media (max-width: 400px) {
         .summary-grid { grid-template-columns: repeat(2, 1fr); }

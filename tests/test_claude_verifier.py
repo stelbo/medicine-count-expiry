@@ -221,6 +221,83 @@ async def test_generate_leaflet_api_error(verifier):
 
 
 @pytest.mark.asyncio
+async def test_extract_label_info_success(verifier):
+    """extract_label_info should parse Claude JSON response and return name + description only."""
+    mock_response_data = {
+        "medicine_name": "Aspirin Plus",
+        "description": "500mg tablets",
+        "confidence": {"medicine_name": 0.95, "description": 0.90},
+    }
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response(json.dumps(mock_response_data))
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_label_info(b"fake_image_bytes", "image/jpeg")
+
+    assert result["medicine_name"] == "Aspirin Plus"
+    assert result["description"] == "500mg tablets"
+    assert result["confidence"]["medicine_name"] == pytest.approx(0.95)
+    assert result["confidence"]["description"] == pytest.approx(0.90)
+    assert "expiry_date" not in result
+
+
+@pytest.mark.asyncio
+async def test_extract_label_info_invalid_json(verifier):
+    """extract_label_info should return None fields on malformed JSON."""
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response("not valid json")
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_label_info(b"fake_bytes")
+
+    assert result["medicine_name"] is None
+    assert result["description"] is None
+    assert result["confidence"]["medicine_name"] == 0.0
+    assert result["confidence"]["description"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_extract_label_info_api_error(verifier):
+    """extract_label_info should handle API exceptions gracefully."""
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(side_effect=RuntimeError("Network failure"))
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_label_info(b"fake_bytes")
+
+    assert result["medicine_name"] is None
+    assert result["description"] is None
+    assert result["confidence"]["medicine_name"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_extract_label_info_default_media_type(verifier):
+    """extract_label_info should use image/jpeg as default media type."""
+    mock_response_data = {
+        "medicine_name": "Ibuprofen 200mg",
+        "description": "200mg film-coated tablets",
+        "confidence": {"medicine_name": 0.88, "description": 0.80},
+    }
+    with patch.object(verifier, "_get_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(
+            return_value=_mock_anthropic_response(json.dumps(mock_response_data))
+        )
+        mock_get_client.return_value = mock_client
+
+        result = await verifier.extract_label_info(b"fake_bytes")
+
+    assert result["medicine_name"] == "Ibuprofen 200mg"
+
+
+@pytest.mark.asyncio
 async def test_extract_and_verify_success(verifier):
     """extract_and_verify should return extraction merged with verification data."""
     extraction_data = {
