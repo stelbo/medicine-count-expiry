@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime
 from functools import partial
 
 from aiohttp import web
@@ -181,7 +182,7 @@ class MedicineLeafletView(HomeAssistantView):
 
         try:
             leaflet = await claude_verifier.generate_leaflet(medicine.medicine_name)
-            generated_at = __import__("datetime").datetime.now().isoformat()
+            generated_at = datetime.now().isoformat()
             updated = await hass.async_add_executor_job(
                 database.save_leaflet, medicine_id, leaflet, generated_at
             )

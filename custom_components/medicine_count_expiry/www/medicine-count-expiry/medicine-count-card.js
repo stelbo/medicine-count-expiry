@@ -250,7 +250,7 @@ class MedicineCountCard extends HTMLElement {
             <button class="icon-btn cancel-add" title="Close dialog">✕</button>
           </div>
           <div class="modal-body">
-            ${hasScanned ? `<div class="scan-notice">✅ Pre-filled from scan result (scan #${this._scanCount})</div>` : (sr.medicine_name || sr.expiry_date ? '<div class="scan-notice">✅ Pre-filled from scan result</div>' : "")}
+            ${this._renderScanNotice(hasScanned, sr)}
             <div class="form-grid">
               <label class="form-label">
                 Name <span class="required">*</span>
@@ -314,6 +314,16 @@ class MedicineCountCard extends HTMLElement {
         </div>
       </div>
     `;
+  }
+
+  _renderScanNotice(hasScanned, scanResult) {
+    if (hasScanned) {
+      return `<div class="scan-notice">✅ Pre-filled from scan result (scan #${this._scanCount})</div>`;
+    }
+    if (scanResult.medicine_name || scanResult.expiry_date) {
+      return '<div class="scan-notice">✅ Pre-filled from scan result</div>';
+    }
+    return "";
   }
 
   _renderSummary() {
@@ -541,7 +551,7 @@ class MedicineCountCard extends HTMLElement {
   }
 
   _escHtml(str) {
-    if (str == null) return "";
+    if (str === null || str === undefined) return "";
     return String(str)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")

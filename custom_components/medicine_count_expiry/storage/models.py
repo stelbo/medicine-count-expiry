@@ -1,6 +1,7 @@
 """Database models for Medicine Count & Expiry integration."""
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -72,12 +73,11 @@ class Medicine:
     @classmethod
     def from_dict(cls, data: dict) -> "Medicine":
         """Create Medicine from dictionary."""
-        import json as _json
         ai_leaflet = data.get("ai_leaflet")
         # ai_leaflet may arrive as a JSON string when read from SQLite
         if isinstance(ai_leaflet, str):
             try:
-                ai_leaflet = _json.loads(ai_leaflet)
+                ai_leaflet = json.loads(ai_leaflet)
             except (ValueError, TypeError):
                 ai_leaflet = None
         return cls(
