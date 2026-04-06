@@ -138,20 +138,17 @@ async def test_extract_from_image_api_error(verifier):
     assert result["expiry_date"] is None
 
 
-def test_get_client_missing_anthropic(verifier):
-    """_get_client should raise ImportError when anthropic is not installed."""
-    import builtins
-    real_import = builtins.__import__
+def test_get_client_missing_anthropic():
+    """ClaudeVerifier should raise ImportError at construction when anthropic is not installed."""
+    import custom_components.medicine_count_expiry.ai.claude_verifier as cv_module
 
-    def mock_import(name, *args, **kwargs):
-        if name == "anthropic":
-            raise ImportError("No module named 'anthropic'")
-        return real_import(name, *args, **kwargs)
-
-    verifier._client = None  # Reset cached client
-    with patch("builtins.__import__", side_effect=mock_import):
+    original = cv_module._anthropic_module
+    try:
+        cv_module._anthropic_module = None
         with pytest.raises(ImportError, match="anthropic package is required"):
-            verifier._get_client()
+            ClaudeVerifier(api_key="test-key-123")
+    finally:
+        cv_module._anthropic_module = original
 
 
 def test_client_is_cached(verifier):

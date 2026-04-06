@@ -4,7 +4,12 @@ from __future__ import annotations
 import base64
 import json
 import logging
-from typing import Any, Optional
+from typing import Any
+
+try:
+    import anthropic as _anthropic_module
+except ImportError:
+    _anthropic_module = None
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -103,18 +108,14 @@ class ClaudeVerifier:
         """Initialize the Claude verifier."""
         self._api_key = api_key
         self._model = model
-        self._client = None
+        if _anthropic_module is None:
+            raise ImportError(
+                "anthropic package is required. Install it with: pip install anthropic"
+            )
+        self._client = _anthropic_module.AsyncAnthropic(api_key=self._api_key)
 
     def _get_client(self):
-        """Get or create the async Anthropic client."""
-        if self._client is None:
-            try:
-                import anthropic
-                self._client = anthropic.AsyncAnthropic(api_key=self._api_key)
-            except ImportError as err:
-                raise ImportError(
-                    "anthropic package is required. Install it with: pip install anthropic"
-                ) from err
+        """Return the already-initialized async Anthropic client."""
         return self._client
 
     async def verify_medicine(
