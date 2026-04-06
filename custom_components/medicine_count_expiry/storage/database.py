@@ -44,9 +44,15 @@ class MedicineDatabase:
         self._init_db()
         self._migrate_db()
 
+    def _connect(self) -> sqlite3.Connection:
+        """Return a new connection with row_factory set to sqlite3.Row."""
+        conn = sqlite3.connect(self._db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+
     def _init_db(self) -> None:
         """Initialize the database tables."""
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             conn.execute(CREATE_TABLE_SQL)
             for idx_sql in CREATE_INDEX_SQL:
                 conn.execute(idx_sql)
@@ -55,34 +61,34 @@ class MedicineDatabase:
 
     def _migrate_db(self) -> None:
         """Apply incremental schema migrations for existing databases."""
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute("PRAGMA table_info(medicines)")
-            existing_columns = {row[1] for row in cursor.fetchall()}
+            existing_columns = {row["name"] for row in cursor.fetchall()}
             if "unit" not in existing_columns:
                 conn.execute("ALTER TABLE medicines ADD COLUMN unit TEXT DEFAULT ''")
                 conn.commit()
                 _LOGGER.debug("Migrated database: added 'unit' column")
 
-    def _row_to_medicine(self, row: tuple) -> Medicine:
+    def _row_to_medicine(self, row: sqlite3.Row) -> Medicine:
         """Convert a database row to a Medicine object."""
         return Medicine(
-            medicine_id=row[0],
-            medicine_name=row[1],
-            expiry_date=row[2],
-            description=row[3],
-            quantity=row[4],
-            location=row[5],
-            image_url=row[6],
-            ai_verified=bool(row[7]),
-            confidence_score=row[8],
-            added_date=row[9],
-            updated_date=row[10],
-            unit=row[11] if len(row) > 11 else "",
+            medicine_id=row["medicine_id"],
+            medicine_name=row["medicine_name"],
+            expiry_date=row["expiry_date"],
+            description=row["description"],
+            quantity=row["quantity"],
+            location=row["location"],
+            image_url=row["image_url"],
+            ai_verified=bool(row["ai_verified"]),
+            confidence_score=row["confidence_score"],
+            added_date=row["added_date"],
+            updated_date=row["updated_date"],
+            unit=row["unit"],
         )
 
     def add_medicine(self, medicine: Medicine) -> Medicine:
         """Add a new medicine to the database."""
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """INSERT INTO medicines
                    (medicine_id, medicine_name, expiry_date, description, quantity,
@@ -111,7 +117,7 @@ class MedicineDatabase:
     def update_medicine(self, medicine: Medicine) -> Optional[Medicine]:
         """Update an existing medicine."""
         medicine.updated_date = datetime.now().isoformat()
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute(
                 """UPDATE medicines SET
                    medicine_name=?, expiry_date=?, description=?, quantity=?,
@@ -140,7 +146,7 @@ class MedicineDatabase:
 
     def delete_medicine(self, medicine_id: str) -> bool:
         """Delete a medicine by ID."""
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute(
                 "DELETE FROM medicines WHERE medicine_id=?", (medicine_id,)
             )
@@ -152,7 +158,7 @@ class MedicineDatabase:
 
     def get_medicine(self, medicine_id: str) -> Optional[Medicine]:
         """Get a medicine by ID."""
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute(
                 "SELECT * FROM medicines WHERE medicine_id=?", (medicine_id,)
             )
@@ -163,7 +169,7 @@ class MedicineDatabase:
 
     def get_all_medicines(self) -> List[Medicine]:
         """Get all medicines."""
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute("SELECT * FROM medicines ORDER BY expiry_date ASC")
             rows = cursor.fetchall()
         return [self._row_to_medicine(row) for row in rows]
@@ -202,7 +208,7 @@ class MedicineDatabase:
 
         query += " ORDER BY expiry_date ASC"
 
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute(query, params)
             rows = cursor.fetchall()
         return [self._row_to_medicine(row) for row in rows]
@@ -221,7 +227,7 @@ class MedicineDatabase:
         """Get all expired medicines."""
         from datetime import date
         today = date.today().isoformat()
-        with sqlite3.connect(self._db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute(
                 "SELECT * FROM medicines WHERE expiry_date < ? ORDER BY expiry_date ASC",
                 (today,),
