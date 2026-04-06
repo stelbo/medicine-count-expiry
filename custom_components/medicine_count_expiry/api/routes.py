@@ -200,6 +200,36 @@ class MedicineLeafletView(HomeAssistantView):
             return web.json_response({"error": str(e)}, status=500)
 
 
+class MedicineExtractOpenDaysView(HomeAssistantView):
+    """View to extract days valid after opening from Claude AI."""
+
+    url = "/api/medicine_count_expiry/medicines/{medicine_id}/extract_open_days"
+    name = "api:medicine_count_expiry:medicine_extract_open_days"
+    requires_auth = True
+
+    async def post(self, request: web.Request, medicine_id: str) -> web.Response:
+        """Handle POST request - extract days valid after opening using Claude."""
+        hass = request.app["hass"]
+        database = hass.data[DOMAIN]["database"]
+        claude_verifier = hass.data[DOMAIN].get("claude_verifier")
+
+        medicine = await hass.async_add_executor_job(database.get_medicine, medicine_id)
+        if not medicine:
+            return web.json_response({"error": "Medicine not found"}, status=404)
+
+        if not claude_verifier:
+            return web.json_response(
+                {"error": "Claude AI is not configured"}, status=503
+            )
+
+        try:
+            result = await claude_verifier.extract_days_valid_after_opening(medicine.medicine_name)
+            return web.json_response(result)
+        except Exception as e:
+            _LOGGER.error("Extract open days error: %s", e)
+            return web.json_response({"error": str(e)}, status=500)
+
+
 class MedicineScanLabelView(HomeAssistantView):
     """View to scan a medicine label image and extract name + description only."""
 

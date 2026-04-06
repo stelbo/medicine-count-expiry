@@ -43,6 +43,7 @@ STATUS_EXPIRED = "expired"
 STATUS_EXPIRING_SOON = "expiring_soon"
 STATUS_GOOD = "good"
 STATUS_UNKNOWN = "unknown"
+STATUS_OPENED_TOO_LONG = "opened_too_long"
 
 # Events
 EVENT_MEDICINE_ADDED = f"{DOMAIN}_medicine_added"
@@ -57,6 +58,7 @@ SERVICE_DELETE_MEDICINE = "delete_medicine"
 SERVICE_SCAN_IMAGE = "scan_image"
 SERVICE_SEARCH_MEDICINES = "search_medicines"
 SERVICE_SEND_DIGEST = "send_digest"
+SERVICE_MARK_MEDICINE_OPENED = "mark_medicine_opened"
 
 # Attributes
 ATTR_MEDICINE_ID = "medicine_id"

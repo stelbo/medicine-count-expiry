@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS medicines (
     ai_leaflet TEXT DEFAULT NULL,
     ai_leaflet_generated_at TEXT DEFAULT NULL,
     ai_extraction_source TEXT DEFAULT NULL,
-    ai_extraction_timestamp TEXT DEFAULT NULL
+    ai_extraction_timestamp TEXT DEFAULT NULL,
+    date_opened TEXT DEFAULT NULL,
+    days_valid_after_opening INTEGER DEFAULT NULL
 )
 """
 
@@ -44,6 +46,8 @@ _MIGRATE_SQL = [
     "ALTER TABLE medicines ADD COLUMN ai_leaflet_generated_at TEXT DEFAULT NULL",
     "ALTER TABLE medicines ADD COLUMN ai_extraction_source TEXT DEFAULT NULL",
     "ALTER TABLE medicines ADD COLUMN ai_extraction_timestamp TEXT DEFAULT NULL",
+    "ALTER TABLE medicines ADD COLUMN date_opened TEXT DEFAULT NULL",
+    "ALTER TABLE medicines ADD COLUMN days_valid_after_opening INTEGER DEFAULT NULL",
 ]
 
 
@@ -81,6 +85,13 @@ class MedicineDatabase:
         ai_leaflet_generated_at = row[12] if len(row) > 12 else None
         ai_extraction_source = row[13] if len(row) > 13 else None
         ai_extraction_timestamp = row[14] if len(row) > 14 else None
+        date_opened = row[15] if len(row) > 15 else None
+        days_valid_after_opening = row[16] if len(row) > 16 else None
+        if days_valid_after_opening is not None:
+            try:
+                days_valid_after_opening = int(days_valid_after_opening)
+            except (ValueError, TypeError):
+                days_valid_after_opening = None
         return Medicine(
             medicine_id=row[0],
             medicine_name=row[1],
@@ -97,6 +108,8 @@ class MedicineDatabase:
             ai_leaflet_generated_at=ai_leaflet_generated_at,
             ai_extraction_source=ai_extraction_source,
             ai_extraction_timestamp=ai_extraction_timestamp,
+            date_opened=date_opened,
+            days_valid_after_opening=days_valid_after_opening,
         )
 
     def add_medicine(self, medicine: Medicine) -> Medicine:
@@ -107,8 +120,9 @@ class MedicineDatabase:
                 """INSERT INTO medicines
                    (medicine_id, medicine_name, expiry_date, description, quantity,
                     location, image_url, ai_verified, confidence_score, added_date, updated_date,
-                    ai_leaflet, ai_leaflet_generated_at, ai_extraction_source, ai_extraction_timestamp)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    ai_leaflet, ai_leaflet_generated_at, ai_extraction_source, ai_extraction_timestamp,
+                    date_opened, days_valid_after_opening)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     medicine.medicine_id,
                     medicine.medicine_name,
@@ -125,6 +139,8 @@ class MedicineDatabase:
                     medicine.ai_leaflet_generated_at,
                     medicine.ai_extraction_source,
                     medicine.ai_extraction_timestamp,
+                    medicine.date_opened,
+                    medicine.days_valid_after_opening,
                 ),
             )
             conn.commit()
@@ -141,7 +157,8 @@ class MedicineDatabase:
                    medicine_name=?, expiry_date=?, description=?, quantity=?,
                    location=?, image_url=?, ai_verified=?, confidence_score=?, updated_date=?,
                    ai_leaflet=?, ai_leaflet_generated_at=?,
-                   ai_extraction_source=?, ai_extraction_timestamp=?
+                   ai_extraction_source=?, ai_extraction_timestamp=?,
+                   date_opened=?, days_valid_after_opening=?
                    WHERE medicine_id=?""",
                 (
                     medicine.medicine_name,
@@ -157,6 +174,8 @@ class MedicineDatabase:
                     medicine.ai_leaflet_generated_at,
                     medicine.ai_extraction_source,
                     medicine.ai_extraction_timestamp,
+                    medicine.date_opened,
+                    medicine.days_valid_after_opening,
                     medicine.medicine_id,
                 ),
             )

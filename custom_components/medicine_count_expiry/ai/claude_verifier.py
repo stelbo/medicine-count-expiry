@@ -197,6 +197,27 @@ Convert all dates to YYYY-MM-DD format.
 
 Respond ONLY with the JSON object, no other text."""
 
+EXTRACT_OPEN_DAYS_PROMPT = """You are a pharmacy assistant. Your task is to determine how many days a medicine is valid after opening.
+
+Medicine name: {medicine_name}
+
+Based on your knowledge of this medicine's package leaflet and typical storage requirements, determine how many days it remains safe to use after being opened.
+
+Common patterns:
+- Eye drops: 28 days after opening
+- Oral solutions/syrups: 14-30 days after opening
+- Creams/ointments: 3-12 months after opening
+- Nasal sprays: 28 days after opening
+
+Please respond with a JSON object:
+{{
+    "days_valid_after_opening": <integer or null>,
+    "notes": "brief explanation or source of this information"
+}}
+
+If you cannot determine this with reasonable confidence, return null for days_valid_after_opening.
+Respond ONLY with the JSON object, no other text."""
+
 
 class ClaudeVerifier:
     """Verifies medicine data using Claude AI."""
@@ -298,6 +319,49 @@ class ClaudeVerifier:
                 "interakcie": None,
                 "error": f"Leaflet generation error: {e}",
             }
+
+    async def extract_days_valid_after_opening(self, medicine_name: str) -> dict[str, Any]:
+        """Extract days valid after opening for a medicine using Claude.
+
+        Args:
+            medicine_name: The name of the medicine.
+
+        Returns:
+            dict with 'days_valid_after_opening' (int or None) and 'notes'.
+        """
+        response_text = ""
+        try:
+            client = self._get_client()
+            prompt = EXTRACT_OPEN_DAYS_PROMPT.format(medicine_name=medicine_name)
+
+            async def _call():
+                return await client.messages.create(
+                    model=self._model,
+                    max_tokens=256,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+
+            message = await _retry_with_backoff(_call)
+            response_text = message.content[0].text.strip()
+            _LOGGER.debug("Claude open days raw response: %s", response_text[:200])
+            result = _parse_claude_response(response_text)
+            _LOGGER.debug("Claude open days result for %s: %s", medicine_name, result)
+            days = result.get("days_valid_after_opening")
+            if days is not None:
+                try:
+                    days = int(days)
+                except (ValueError, TypeError):
+                    days = None
+            return {
+                "days_valid_after_opening": days,
+                "notes": result.get("notes", ""),
+            }
+        except json.JSONDecodeError as e:
+            _LOGGER.error("Failed to parse Claude open days response: %s. Raw: %s", e, response_text[:500])
+            return {"days_valid_after_opening": None, "notes": f"Failed to parse AI response: {e}"}
+        except Exception as e:
+            _LOGGER.error("Claude open days extraction error: %s", e)
+            return {"days_valid_after_opening": None, "notes": f"Extraction error: {e}"}
 
     async def extract_and_verify(self, image_data: bytes, media_type: str = "image/jpeg") -> dict[str, Any]:
         """Extract medicine info from an image AND verify the extracted data."""
