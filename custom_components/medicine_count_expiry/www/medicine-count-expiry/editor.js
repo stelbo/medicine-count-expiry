@@ -11,7 +11,7 @@ class MedicineCountCardEditor extends HTMLElement {
   }
 
   setConfig(config) {
-    this._config = { ...config };
+    this._config = { ...(config || {}) };
     this.render();
   }
 
@@ -44,7 +44,7 @@ class MedicineCountCardEditor extends HTMLElement {
 
     this.shadowRoot.querySelector(".title-input")?.addEventListener("input", (e) => {
       this._config = { ...this._config, title: e.target.value };
-      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     });
   }
 
