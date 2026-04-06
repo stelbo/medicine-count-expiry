@@ -1,11 +1,13 @@
 """Tests for frontend registration module."""
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 from custom_components.medicine_count_expiry.frontend import (
     _EDITOR_URL,
     _RESOURCE_URL,
     register_frontend,
 )
+
+_FRONTEND_LOGGER = "custom_components.medicine_count_expiry.frontend"
 
 
 def test_resource_url_uses_local_prefix():
@@ -47,7 +49,7 @@ def test_register_frontend_logs_info_on_success(caplog):
     with patch(
         "custom_components.medicine_count_expiry.frontend.add_extra_js_url"
     ):
-        with caplog.at_level(logging.INFO, logger="custom_components.medicine_count_expiry.frontend"):
+        with caplog.at_level(logging.INFO, logger=_FRONTEND_LOGGER):
             register_frontend(hass)
 
     assert any(_RESOURCE_URL in record.message for record in caplog.records)
@@ -64,10 +66,10 @@ def test_register_frontend_handles_exception_gracefully(caplog):
         "custom_components.medicine_count_expiry.frontend.add_extra_js_url",
         side_effect=RuntimeError("test error"),
     ):
-        with caplog.at_level(logging.WARNING, logger="custom_components.medicine_count_expiry.frontend"):
+        with caplog.at_level(logging.WARNING, logger=_FRONTEND_LOGGER):
             # Should NOT raise even though add_extra_js_url raises
             register_frontend(hass)
 
-    warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+    warning_messages = [r.message for r in caplog.records]
     assert len(warning_messages) == 2
     assert all("Could not register" in msg for msg in warning_messages)
