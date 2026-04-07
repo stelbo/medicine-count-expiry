@@ -115,7 +115,7 @@ class Medicine:
                 open_delta = (open_expiry - today).days
                 if open_delta < 0:
                     return STATUS_OPENED_TOO_LONG
-                if open_delta <= 3:
+                if open_delta <= warning_days:
                     return STATUS_EXPIRING_SOON
             except (ValueError, TypeError):
                 pass

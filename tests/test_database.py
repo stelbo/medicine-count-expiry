@@ -259,14 +259,14 @@ def test_status_opened_too_long():
 
 
 def test_status_good_when_opened_within_validity():
-    """Medicine opened but within validity period should still check manufacturing expiry."""
+    """Medicine whose open expiry is well beyond the warning window falls through to manufacturing expiry."""
     from datetime import date, timedelta
     recent = (date.today() - timedelta(days=3)).isoformat()
     m = Medicine(
         medicine_name="Paralen 200ml",
         expiry_date="2099-01-01",
         date_opened=recent,
-        days_valid_after_opening=30,
+        days_valid_after_opening=365,  # open_delta ≈ 362 days >> default warning_days=30
     )
     assert m.get_status() == "good"
 
@@ -282,6 +282,23 @@ def test_status_priority_opened_too_long_over_good_manufacturing():
         days_valid_after_opening=7,
     )
     assert m.get_status() == "opened_too_long"
+
+
+def test_status_open_expiry_uses_warning_days():
+    """open-expiry 'expiring soon' threshold must respect warning_days, not a hardcoded value."""
+    from datetime import date, timedelta
+    # Opened 25 days ago, valid for 50 days → open_delta = 25
+    open_date = (date.today() - timedelta(days=25)).isoformat()
+    m = Medicine(
+        medicine_name="Paralen 200ml",
+        expiry_date="2099-01-01",
+        date_opened=open_date,
+        days_valid_after_opening=50,
+    )
+    # 25 days remaining < warning_days=30 → expiring_soon
+    assert m.get_status(30) == "expiring_soon"
+    # 25 days remaining > warning_days=20 → falls through to manufacturing expiry → good
+    assert m.get_status(20) == "good"
 
 
 def test_status_manufacturing_expiry_when_no_open_date():

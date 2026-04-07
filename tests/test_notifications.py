@@ -207,3 +207,44 @@ async def test_trigger_notification_expiring_soon():
     event_data = hass.bus.async_fire.call_args[0][1]
     assert event_data["type"] == NOTIFICATION_TYPE_EXPIRING_SOON
     assert event_data["medicine_name"] == "Ibuprofen"
+
+
+@pytest.mark.asyncio
+async def test_check_and_notify_opened_too_long(db, alerts, mock_hass):
+    """check_and_notify should fire an expired alert for medicines opened past their validity."""
+    from datetime import date, timedelta
+    past_open = (date.today() - timedelta(days=20)).isoformat()
+    opened = Medicine(
+        medicine_name="EyeDrops",
+        expiry_date="2099-01-01",
+        date_opened=past_open,
+        days_valid_after_opening=7,
+    )
+    db.add_medicine(opened)
+    await alerts.check_and_notify()
+    assert mock_hass.services.async_call.called
+    call_args = mock_hass.services.async_call.call_args
+    message = call_args[0][2]["message"]
+    assert "EXPIRED" in message
+    assert "EyeDrops" in message
+
+
+@pytest.mark.asyncio
+async def test_notify_warns_on_circular_service(db, mock_hass, caplog):
+    """_notify should warn when the configured service is the integration's own event bus service."""
+    import logging
+    circular_alerts = MedicineAlerts(
+        hass=mock_hass,
+        database=db,
+        notification_service="medicine_count_expiry_notification",
+        warning_days=30,
+    )
+    with caplog.at_level(
+        logging.WARNING,
+        logger="custom_components.medicine_count_expiry.notifications.alerts",
+    ):
+        await circular_alerts._notify("Test Title", "Test Message")
+    warning_messages = [r.message for r in caplog.records]
+    assert any("only fires HA bus events" in msg for msg in warning_messages)
+    # Should still attempt to call the (circular) service
+    mock_hass.services.async_call.assert_called_once()

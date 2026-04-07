@@ -208,3 +208,57 @@ def test_get_summary_has_breakdown_fields(search_engine):
     summary = search_engine.get_summary()
     assert "expired_manufacturing" in summary
     assert "expired_opened_too_long" in summary
+
+
+def test_get_all_expired_includes_opened_too_long(db, search_engine):
+    """get_all_expired() should include both manufacturing-expired and opened_too_long medicines."""
+    from datetime import date, timedelta
+    past_open = (date.today() - timedelta(days=20)).isoformat()
+    mfg_expired = Medicine(medicine_name="OldDrug", expiry_date="2000-01-01")
+    opened_too_long = Medicine(
+        medicine_name="OpenedTooLong",
+        expiry_date="2099-01-01",
+        date_opened=past_open,
+        days_valid_after_opening=7,
+    )
+    good = Medicine(medicine_name="GoodDrug", expiry_date="2099-01-01")
+    db.add_medicine(mfg_expired)
+    db.add_medicine(opened_too_long)
+    db.add_medicine(good)
+    results = search_engine.get_all_expired()
+    assert len(results) == 2
+    ids = {m.medicine_id for m in results}
+    assert mfg_expired.medicine_id in ids
+    assert opened_too_long.medicine_id in ids
+    assert good.medicine_id not in ids
+
+
+def test_get_all_expiring_soon_includes_open_expiry(db):
+    """get_all_expiring_soon() should include medicines expiring via their open countdown."""
+    from datetime import date, timedelta
+    from custom_components.medicine_count_expiry.search.search_engine import MedicineSearchEngine
+
+    # Opened 15 days ago, valid for 30 days → open_delta = 15, within warning_days=30
+    open_date = (date.today() - timedelta(days=15)).isoformat()
+    open_expiring = Medicine(
+        medicine_name="AlmostDone",
+        expiry_date="2099-01-01",
+        date_opened=open_date,
+        days_valid_after_opening=30,
+    )
+    mfg_expiring = Medicine(
+        medicine_name="MfgExpiring",
+        expiry_date=(date.today() + timedelta(days=10)).isoformat(),
+    )
+    good = Medicine(medicine_name="GoodDrug", expiry_date="2099-01-01")
+    db.add_medicine(open_expiring)
+    db.add_medicine(mfg_expiring)
+    db.add_medicine(good)
+
+    engine = MedicineSearchEngine(db, warning_days=30)
+    results = engine.get_all_expiring_soon()
+    assert len(results) == 2
+    ids = {m.medicine_id for m in results}
+    assert open_expiring.medicine_id in ids
+    assert mfg_expiring.medicine_id in ids
+    assert good.medicine_id not in ids
