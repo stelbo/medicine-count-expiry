@@ -6,12 +6,15 @@ import logging
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.core import HomeAssistant
 
+from .const import VERSION
+
 _LOGGER = logging.getLogger(__name__)
 
 # Files are placed in /config/www/medicine-count-expiry/ and are served by
 # Home Assistant at /local/medicine-count-expiry/.
-_RESOURCE_URL = "/local/medicine-count-expiry/medicine-count-card.js"
-_EDITOR_URL = "/local/medicine-count-expiry/editor.js"
+# Cache-busting query parameter forces browsers to re-fetch after updates.
+_RESOURCE_URL = f"/local/medicine-count-expiry/medicine-count-card.js?v={VERSION}"
+_EDITOR_URL = f"/local/medicine-count-expiry/editor.js?v={VERSION}"
 
 
 def register_frontend(hass: HomeAssistant) -> None:
