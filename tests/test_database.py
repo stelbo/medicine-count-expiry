@@ -396,3 +396,38 @@ def test_count_medicines_by_status_empty(db):
     assert counts["good"] == 0
     assert counts["expiring_soon"] == 0
     assert counts["opened_too_long"] == 0
+
+
+# ── Location tracking ──────────────────────────────────────────────────────
+
+def test_default_location_set_on_add(db):
+    """default_location should be initialised from location when medicine is added."""
+    m = Medicine(medicine_name="Aspirin", expiry_date="2099-12-31", location="bathroom")
+    db.add_medicine(m)
+    result = db.get_medicine(m.medicine_id)
+    assert result.default_location == "bathroom"
+    assert result.location_changed_by_user is False
+
+
+def test_location_changed_by_user_persisted(db, sample_medicine):
+    """location_changed_by_user flag should round-trip through the database."""
+    db.add_medicine(sample_medicine)
+    sample_medicine.location = "bedroom"
+    sample_medicine.location_changed_by_user = True
+    db.update_medicine(sample_medicine)
+    result = db.get_medicine(sample_medicine.medicine_id)
+    assert result.location == "bedroom"
+    assert result.location_changed_by_user is True
+    # default_location should still hold the original value
+    assert result.default_location == "bathroom"
+
+
+def test_default_location_not_overwritten_on_update(db, sample_medicine):
+    """Updating location should not change default_location."""
+    db.add_medicine(sample_medicine)
+    sample_medicine.location = "kitchen"
+    sample_medicine.location_changed_by_user = True
+    db.update_medicine(sample_medicine)
+    result = db.get_medicine(sample_medicine.medicine_id)
+    assert result.default_location == "bathroom"  # original
+    assert result.location == "kitchen"            # updated

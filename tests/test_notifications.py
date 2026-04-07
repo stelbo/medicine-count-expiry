@@ -141,3 +141,69 @@ async def test_expiring_soon_alert_content(db, mock_hass):
     message = call_args[0][2]["message"]
     assert "QuickExpire" in message
     assert "days" in message
+
+
+# ── HA event bus notification events ──────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_trigger_notification_fires_event():
+    """trigger_notification should fire the correct HA bus event."""
+    from unittest.mock import MagicMock
+    from custom_components.medicine_count_expiry.services import trigger_notification
+    from custom_components.medicine_count_expiry.const import (
+        EVENT_NOTIFICATION,
+        NOTIFICATION_TYPE_EXPIRED,
+    )
+
+    hass = MagicMock()
+    m = Medicine(medicine_name="Aspirin", expiry_date="2000-01-01")
+    await trigger_notification(hass, NOTIFICATION_TYPE_EXPIRED, m)
+
+    hass.bus.async_fire.assert_called_once()
+    call_args = hass.bus.async_fire.call_args
+    event_type = call_args[0][0]
+    event_data = call_args[0][1]
+
+    assert event_type == EVENT_NOTIFICATION
+    assert event_data["type"] == NOTIFICATION_TYPE_EXPIRED
+    assert event_data["medicine_name"] == "Aspirin"
+    assert event_data["expiry_date"] == "2000-01-01"
+
+
+@pytest.mark.asyncio
+async def test_trigger_notification_includes_open_expiry():
+    """trigger_notification should include open_expiry_date when available."""
+    from unittest.mock import MagicMock
+    from custom_components.medicine_count_expiry.services import trigger_notification
+    from custom_components.medicine_count_expiry.const import NOTIFICATION_TYPE_OPENED_TOO_LONG
+
+    hass = MagicMock()
+    m = Medicine(
+        medicine_name="EyeDrops",
+        expiry_date="2099-12-31",
+        date_opened="2020-01-01",
+        days_valid_after_opening=28,
+    )
+    await trigger_notification(hass, NOTIFICATION_TYPE_OPENED_TOO_LONG, m)
+
+    event_data = hass.bus.async_fire.call_args[0][1]
+    assert event_data["open_expiry_date"] == "2020-01-29"
+
+
+@pytest.mark.asyncio
+async def test_trigger_notification_expiring_soon():
+    """trigger_notification fires with expiring_soon type."""
+    from unittest.mock import MagicMock
+    from custom_components.medicine_count_expiry.services import trigger_notification
+    from custom_components.medicine_count_expiry.const import (
+        EVENT_NOTIFICATION,
+        NOTIFICATION_TYPE_EXPIRING_SOON,
+    )
+
+    hass = MagicMock()
+    m = Medicine(medicine_name="Ibuprofen", expiry_date="2099-06-01")
+    await trigger_notification(hass, NOTIFICATION_TYPE_EXPIRING_SOON, m)
+
+    event_data = hass.bus.async_fire.call_args[0][1]
+    assert event_data["type"] == NOTIFICATION_TYPE_EXPIRING_SOON
+    assert event_data["medicine_name"] == "Ibuprofen"

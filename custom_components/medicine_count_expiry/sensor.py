@@ -10,7 +10,18 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_EXPIRY_WARNING_DAYS, DEFAULT_EXPIRY_WARNING_DAYS, DOMAIN
+from .const import (
+    CONF_EXPIRY_WARNING_DAYS,
+    DEFAULT_EXPIRY_WARNING_DAYS,
+    DOMAIN,
+    NOTIFICATION_EXPIRY_SOON_DAYS,
+    NOTIFICATION_TYPE_EXPIRED,
+    NOTIFICATION_TYPE_EXPIRING_SOON,
+    NOTIFICATION_TYPE_OPENED_TOO_LONG,
+    STATUS_EXPIRED,
+    STATUS_OPENED_TOO_LONG,
+)
+from .services import trigger_notification
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -90,9 +101,36 @@ class MedicineTotalCountSensor(MedicineBaseSensor):
                 "good": summary["good"],
                 "locations": summary["locations"],
             }
+            await self._fire_notification_events()
         else:
             self._attr_native_value = 0
             self._extra_attrs = {}
+
+    async def _fire_notification_events(self) -> None:
+        """Fire HA bus notification events for medicines requiring attention."""
+        all_medicines = await self.hass.async_add_executor_job(
+            self._search_engine.get_all
+        )
+        today = date.today()
+        for medicine in all_medicines:
+            status = medicine.get_status()
+            if status == STATUS_EXPIRED:
+                await trigger_notification(self.hass, NOTIFICATION_TYPE_EXPIRED, medicine)
+            elif status == STATUS_OPENED_TOO_LONG:
+                await trigger_notification(
+                    self.hass, NOTIFICATION_TYPE_OPENED_TOO_LONG, medicine
+                )
+            else:
+                # Check manufacturing expiry within the short notification window
+                try:
+                    expiry = date.fromisoformat(medicine.expiry_date)
+                    days_until = (expiry - today).days
+                    if 0 <= days_until <= NOTIFICATION_EXPIRY_SOON_DAYS:
+                        await trigger_notification(
+                            self.hass, NOTIFICATION_TYPE_EXPIRING_SOON, medicine
+                        )
+                except (ValueError, TypeError):
+                    pass
 
 
 class MedicineExpiredCountSensor(MedicineBaseSensor):

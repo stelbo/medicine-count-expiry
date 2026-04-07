@@ -30,7 +30,9 @@ CREATE TABLE IF NOT EXISTS medicines (
     ai_extraction_source TEXT DEFAULT NULL,
     ai_extraction_timestamp TEXT DEFAULT NULL,
     date_opened TEXT DEFAULT NULL,
-    days_valid_after_opening INTEGER DEFAULT NULL
+    days_valid_after_opening INTEGER DEFAULT NULL,
+    default_location TEXT DEFAULT NULL,
+    location_changed_by_user INTEGER DEFAULT 0
 )
 """
 
@@ -48,6 +50,8 @@ _MIGRATE_SQL = [
     "ALTER TABLE medicines ADD COLUMN ai_extraction_timestamp TEXT DEFAULT NULL",
     "ALTER TABLE medicines ADD COLUMN date_opened TEXT DEFAULT NULL",
     "ALTER TABLE medicines ADD COLUMN days_valid_after_opening INTEGER DEFAULT NULL",
+    "ALTER TABLE medicines ADD COLUMN default_location TEXT DEFAULT NULL",
+    "ALTER TABLE medicines ADD COLUMN location_changed_by_user INTEGER DEFAULT 0",
 ]
 
 
@@ -92,6 +96,8 @@ class MedicineDatabase:
                 days_valid_after_opening = int(days_valid_after_opening)
             except (ValueError, TypeError):
                 days_valid_after_opening = None
+        default_location = row[17] if len(row) > 17 else None
+        location_changed_by_user = bool(row[18]) if len(row) > 18 else False
         return Medicine(
             medicine_id=row[0],
             medicine_name=row[1],
@@ -110,19 +116,25 @@ class MedicineDatabase:
             ai_extraction_timestamp=ai_extraction_timestamp,
             date_opened=date_opened,
             days_valid_after_opening=days_valid_after_opening,
+            default_location=default_location,
+            location_changed_by_user=location_changed_by_user,
         )
 
     def add_medicine(self, medicine: Medicine) -> Medicine:
         """Add a new medicine to the database."""
         ai_leaflet_json = json.dumps(medicine.ai_leaflet) if medicine.ai_leaflet is not None else None
+        # Ensure default_location is set from location when not explicitly provided
+        if medicine.default_location is None:
+            medicine.default_location = medicine.location
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
                 """INSERT INTO medicines
                    (medicine_id, medicine_name, expiry_date, description, quantity,
                     location, image_url, ai_verified, confidence_score, added_date, updated_date,
                     ai_leaflet, ai_leaflet_generated_at, ai_extraction_source, ai_extraction_timestamp,
-                    date_opened, days_valid_after_opening)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    date_opened, days_valid_after_opening,
+                    default_location, location_changed_by_user)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     medicine.medicine_id,
                     medicine.medicine_name,
@@ -141,6 +153,8 @@ class MedicineDatabase:
                     medicine.ai_extraction_timestamp,
                     medicine.date_opened,
                     medicine.days_valid_after_opening,
+                    medicine.default_location,
+                    int(medicine.location_changed_by_user),
                 ),
             )
             conn.commit()
@@ -158,7 +172,8 @@ class MedicineDatabase:
                    location=?, image_url=?, ai_verified=?, confidence_score=?, updated_date=?,
                    ai_leaflet=?, ai_leaflet_generated_at=?,
                    ai_extraction_source=?, ai_extraction_timestamp=?,
-                   date_opened=?, days_valid_after_opening=?
+                   date_opened=?, days_valid_after_opening=?,
+                   default_location=?, location_changed_by_user=?
                    WHERE medicine_id=?""",
                 (
                     medicine.medicine_name,
@@ -176,6 +191,8 @@ class MedicineDatabase:
                     medicine.ai_extraction_timestamp,
                     medicine.date_opened,
                     medicine.days_valid_after_opening,
+                    medicine.default_location,
+                    int(medicine.location_changed_by_user),
                     medicine.medicine_id,
                 ),
             )

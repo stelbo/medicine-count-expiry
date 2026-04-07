@@ -51,6 +51,17 @@ EVENT_MEDICINE_UPDATED = f"{DOMAIN}_medicine_updated"
 EVENT_MEDICINE_DELETED = f"{DOMAIN}_medicine_deleted"
 EVENT_MEDICINE_EXPIRING = f"{DOMAIN}_medicine_expiring"
 
+# Notification event (for HA automation triggers)
+EVENT_NOTIFICATION = f"{DOMAIN}_notification"
+
+# Notification types
+NOTIFICATION_TYPE_EXPIRED = "medicine_expired"
+NOTIFICATION_TYPE_EXPIRING_SOON = "medicine_expiring_soon"
+NOTIFICATION_TYPE_OPENED_TOO_LONG = "medicine_opened_too_long"
+
+# Days before manufacturing expiry to fire "expiring soon" notification events
+NOTIFICATION_EXPIRY_SOON_DAYS = 7
+
 # Services
 SERVICE_ADD_MEDICINE = "add_medicine"
 SERVICE_UPDATE_MEDICINE = "update_medicine"
