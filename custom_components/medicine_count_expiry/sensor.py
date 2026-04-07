@@ -185,7 +185,7 @@ class MedicineExpiredCountSensor(MedicineBaseSensor):
                         "location": m.location,
                     }
                     for m in (await self.hass.async_add_executor_job(
-                        self._search_engine.get_expired
+                        self._search_engine.get_all_expired
                     ))[:10]
                 ],
             }
@@ -213,21 +213,29 @@ class MedicineExpiringSoonCountSensor(MedicineBaseSensor):
             summary = await self.hass.async_add_executor_job(self._search_engine.get_summary)
             self._attr_native_value = summary["expiring_soon"]
             expiring_soon = await self.hass.async_add_executor_job(
-                self._search_engine.get_expiring_soon
+                self._search_engine.get_all_expiring_soon
             )
-            self._extra_attrs = {
-                "medicines": [
-                    {
-                        "name": m.medicine_name,
-                        "expiry_date": m.expiry_date,
-                        "location": m.location,
-                        "days_until_expiry": (
-                            date.fromisoformat(m.expiry_date) - date.today()
-                        ).days,
-                    }
-                    for m in expiring_soon[:10]
-                ]
-            }
+            medicines_attrs = []
+            for m in expiring_soon[:10]:
+                try:
+                    mfg_days = (date.fromisoformat(m.expiry_date) - date.today()).days
+                except (ValueError, TypeError):
+                    mfg_days = 0
+                if m.open_expiry_date:
+                    try:
+                        open_days = (date.fromisoformat(m.open_expiry_date) - date.today()).days
+                        days_until = min(mfg_days, open_days)
+                    except (ValueError, TypeError):
+                        days_until = mfg_days
+                else:
+                    days_until = mfg_days
+                medicines_attrs.append({
+                    "name": m.medicine_name,
+                    "expiry_date": m.expiry_date,
+                    "location": m.location,
+                    "days_until_expiry": days_until,
+                })
+            self._extra_attrs = {"medicines": medicines_attrs}
         else:
             self._attr_native_value = 0
             self._extra_attrs = {"medicines": []}

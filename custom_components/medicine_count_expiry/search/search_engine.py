@@ -58,6 +58,31 @@ class MedicineSearchEngine:
         """Get all expired medicines."""
         return self._db.get_expired_medicines()
 
+    def get_all_expired(self) -> List[Medicine]:
+        """Get all medicines whose computed status is 'expired' or 'opened_too_long'.
+
+        Unlike :meth:`get_expired`, this uses :meth:`~Medicine.get_status` so it
+        correctly includes medicines that have been open past their post-opening
+        validity period (status ``opened_too_long``), not just manufacturing-expired
+        ones found by the SQL date query.
+        """
+        return [
+            m for m in self._db.get_all_medicines()
+            if m.get_status(self._warning_days) in ("expired", "opened_too_long")
+        ]
+
+    def get_all_expiring_soon(self) -> List[Medicine]:
+        """Get all medicines whose computed status is 'expiring_soon'.
+
+        Unlike :meth:`get_expiring_soon`, this uses :meth:`~Medicine.get_status` so it
+        correctly includes medicines nearing the end of their post-opening validity
+        period, not only those approaching their manufacturing expiry date.
+        """
+        return [
+            m for m in self._db.get_all_medicines()
+            if m.get_status(self._warning_days) == "expiring_soon"
+        ]
+
     def get_by_location(self, location: str) -> List[Medicine]:
         """Get all medicines at a specific location."""
         return self._db.search_medicines(location=location)

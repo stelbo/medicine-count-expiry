@@ -2,7 +2,7 @@
 
 DOMAIN = "medicine_count_expiry"
 PLATFORMS = ["sensor"]
-VERSION = "1.0.33"
+VERSION = "1.0.34"
 
 # Config keys
 CONF_CLAUDE_API_KEY = "claude_api_key"
