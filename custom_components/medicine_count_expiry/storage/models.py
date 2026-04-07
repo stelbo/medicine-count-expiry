@@ -36,6 +36,7 @@ class Medicine:
     days_valid_after_opening: Optional[int] = None  # Number of days valid after opening
     default_location: Optional[str] = None  # Location stored when medicine was first added
     location_changed_by_user: bool = False  # True when user explicitly changed location
+    leaflet_url: Optional[str] = None  # URL to official medicine info / package leaflet page
 
     def __post_init__(self) -> None:
         """Set default_location from location when not explicitly provided.
@@ -89,6 +90,7 @@ class Medicine:
             "open_expiry_date": self._compute_open_expiry_date(),
             "default_location": self.default_location,
             "location_changed_by_user": self.location_changed_by_user,
+            "leaflet_url": self.leaflet_url,
         }
 
     def get_status(self, warning_days: Optional[int] = None) -> str:
@@ -169,4 +171,5 @@ class Medicine:
             days_valid_after_opening=days_valid,
             default_location=data.get("default_location"),
             location_changed_by_user=bool(data.get("location_changed_by_user", False)),
+            leaflet_url=data.get("leaflet_url"),
         )

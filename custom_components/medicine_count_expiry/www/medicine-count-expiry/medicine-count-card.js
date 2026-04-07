@@ -851,7 +851,7 @@ class MedicineCountCard extends HTMLElement {
 
     // Determine source info: prefer ai_leaflet metadata, fall back to extraction info
     const source = (leaflet && leaflet.source) || null;
-    const sourceUrl = (leaflet && leaflet.source_url) || null;
+    const sourceUrl = (leaflet && leaflet.source_url) || m.leaflet_url || null;
     const language = (leaflet && leaflet.language) || null;
     const generatedAt = m.ai_leaflet_generated_at || null;
     const extractionSource = m.ai_extraction_source || null;
@@ -872,9 +872,10 @@ class MedicineCountCard extends HTMLElement {
     const sourceRow = displaySource
       ? `<div class="leaflet-source-row">
            <span class="leaflet-source-label">Source:</span>
+           <span class="leaflet-source-value">${this._escHtml(displaySource)}</span>
            ${sourceUrl
-             ? `<a class="leaflet-source-link" href="${this._escHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${this._escHtml(displaySource)} <span class="leaflet-link-icon">🔗</span></a>`
-             : `<span class="leaflet-source-value">${this._escHtml(displaySource)}</span>`}
+             ? `<a class="leaflet-see-details-link" href="${this._escHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">See Details →</a>`
+             : ""}
          </div>`
       : "";
 
@@ -1793,6 +1794,11 @@ class MedicineCountCard extends HTMLElement {
         font-weight: 600; color: #666; min-width: 80px;
       }
       .leaflet-source-value { color: var(--secondary-text-color, #555); }
+      .leaflet-see-details-link {
+        color: var(--primary-color, #2196F3); text-decoration: none; font-size: 0.8rem;
+        cursor: pointer; margin-left: 6px;
+      }
+      .leaflet-see-details-link:hover { text-decoration: underline; }
 
       /* Scan actions */
       .scan-actions { display: flex; gap: 8px; align-items: center; }
