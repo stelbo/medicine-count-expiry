@@ -26,6 +26,20 @@ def test_editor_url_uses_local_prefix():
     assert "editor.js" in _EDITOR_URL
 
 
+def test_resource_url_includes_version_for_cache_busting():
+    """`_RESOURCE_URL` must include a version query parameter for cache-busting."""
+    assert "?v=" in _RESOURCE_URL, (
+        f"_RESOURCE_URL should include '?v=' for cache-busting, got {_RESOURCE_URL!r}"
+    )
+
+
+def test_editor_url_includes_version_for_cache_busting():
+    """`_EDITOR_URL` must include a version query parameter for cache-busting."""
+    assert "?v=" in _EDITOR_URL, (
+        f"_EDITOR_URL should include '?v=' for cache-busting, got {_EDITOR_URL!r}"
+    )
+
+
 def test_register_frontend_calls_add_extra_js_url_for_both_files():
     """register_frontend should register both card and editor JS URLs."""
     hass = MagicMock()

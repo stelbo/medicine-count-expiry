@@ -1,3 +1,4 @@
+/* Medicine Count & Expiry - Lovelace Card Styles - v1.0.33 */
 :host {
   --medicine-card-background: var(--ha-card-background, white);
   --medicine-card-padding: 16px;

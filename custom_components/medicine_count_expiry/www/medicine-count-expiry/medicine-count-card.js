@@ -3,6 +3,22 @@
  * Displays medicine inventory with expiry tracking, search, and add/delete functionality.
  */
 
+// Diagnostic logging
+console.log('[Medicine Count Card] Loading custom element...');
+console.log('[Medicine Count Card] Current URL:', window.location.href);
+
+// Error recovery handler for missing custom element
+window.addEventListener('error', (event) => {
+  if (event.message && event.message.includes('medicine-count-card')) {
+    console.error('[Medicine Count Card] CRITICAL ERROR: Custom element failed to load');
+    console.error('[Medicine Count Card] Possible causes:');
+    console.error('  1. File not found at /local/medicine-count-expiry/medicine-count-card.js');
+    console.error('  2. Browser cache not cleared (try Ctrl+Shift+R)');
+    console.error('  3. Home Assistant not restarted after installing integration');
+    console.error('[Medicine Count Card] Check browser console and HA logs for details');
+  }
+});
+
 const BASE_URL = "/api/medicine_count_expiry";
 
 class MedicineCountCard extends HTMLElement {
@@ -1813,6 +1829,8 @@ class MedicineCountCard extends HTMLElement {
 }
 
 customElements.define("medicine-count-card", MedicineCountCard);
+console.log('[Medicine Count Card] JS file loaded successfully');
+console.log('[Medicine Count Card] Custom element registered successfully');
 
 // Register card AFTER page loads to ensure Home Assistant is ready
 if (document.readyState === "loading") {
@@ -1829,4 +1847,5 @@ function registerCard() {
     description: "Track your medicine inventory and expiry dates",
     preview: true,
   });
+  console.log('[Medicine Count Card] Card registered in window.customCards');
 }

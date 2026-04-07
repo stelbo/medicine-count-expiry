@@ -41,6 +41,7 @@ def _copy_www_files(hass: HomeAssistant) -> None:
     """Copy bundled www files to /config/www/ so /local/ can serve them."""
     src = Path(__file__).parent / "www" / "medicine-count-expiry"
     dst = Path(hass.config.path("www")) / "medicine-count-expiry"
+    _LOGGER.info("Medicine Count & Expiry: setting up www files")
     try:
         dst.mkdir(parents=True, exist_ok=True)
         for src_file in src.iterdir():
@@ -54,6 +55,18 @@ def _copy_www_files(hass: HomeAssistant) -> None:
             type(err).__name__,
             err,
         )
+
+    # Validate required files are present after copy
+    required_files = ["medicine-count-card.js", "editor.js", "styles.css"]
+    for filename in required_files:
+        file_path = dst / filename
+        if file_path.exists():
+            _LOGGER.debug("Found: www/medicine-count-expiry/%s", filename)
+        else:
+            _LOGGER.error(
+                "Medicine Count & Expiry: required file missing: www/medicine-count-expiry/%s",
+                filename,
+            )
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
