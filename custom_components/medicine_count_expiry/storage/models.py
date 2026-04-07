@@ -34,6 +34,25 @@ class Medicine:
     ai_extraction_timestamp: Optional[str] = None
     date_opened: Optional[str] = None  # ISO format: YYYY-MM-DD
     days_valid_after_opening: Optional[int] = None  # Number of days valid after opening
+    default_location: Optional[str] = None  # Location stored when medicine was first added
+    location_changed_by_user: bool = False  # True when user explicitly changed location
+
+    def __post_init__(self) -> None:
+        """Set default_location from location when not explicitly provided.
+
+        This runs when a Medicine is first created without a default_location
+        (e.g. from ``Medicine.from_dict()`` with a fresh record).  On subsequent
+        loads from the database ``from_dict`` always passes the stored
+        ``default_location``, so this branch is skipped and the original value
+        is preserved.
+        """
+        if self.default_location is None:
+            self.default_location = self.location
+
+    @property
+    def open_expiry_date(self) -> Optional[str]:
+        """Return the computed open expiry date (public accessor)."""
+        return self._compute_open_expiry_date()
 
     def _compute_open_expiry_date(self) -> Optional[str]:
         """Compute open expiry date from date_opened + days_valid_after_opening."""
@@ -68,6 +87,8 @@ class Medicine:
             "date_opened": self.date_opened,
             "days_valid_after_opening": self.days_valid_after_opening,
             "open_expiry_date": self._compute_open_expiry_date(),
+            "default_location": self.default_location,
+            "location_changed_by_user": self.location_changed_by_user,
         }
 
     def get_status(self, warning_days: Optional[int] = None) -> str:
@@ -146,4 +167,6 @@ class Medicine:
             ai_extraction_timestamp=data.get("ai_extraction_timestamp"),
             date_opened=data.get("date_opened"),
             days_valid_after_opening=days_valid,
+            default_location=data.get("default_location"),
+            location_changed_by_user=bool(data.get("location_changed_by_user", False)),
         )

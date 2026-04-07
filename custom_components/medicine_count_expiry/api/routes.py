@@ -9,7 +9,7 @@ from functools import partial
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 
-from ..const import DOMAIN
+from ..const import DOMAIN, LEAFLET_LANGUAGE, LEAFLET_SOURCE_NAME
 from ..storage.models import Medicine
 
 _LOGGER = logging.getLogger(__name__)
@@ -123,6 +123,9 @@ class MedicineDetailView(HomeAssistantView):
             )
 
         merged = {**existing.to_dict(), **data, "medicine_id": medicine_id}
+        # Track when user explicitly changes the location
+        if "location" in data and data["location"] != existing.location:
+            merged["location_changed_by_user"] = True
         updated_medicine = Medicine.from_dict(merged)
         result = await hass.async_add_executor_job(database.update_medicine, updated_medicine)
         if not result:
@@ -182,6 +185,10 @@ class MedicineLeafletView(HomeAssistantView):
 
         try:
             leaflet = await claude_verifier.generate_leaflet(medicine.medicine_name)
+            # Annotate the leaflet with source metadata
+            leaflet["source"] = LEAFLET_SOURCE_NAME
+            leaflet["source_url"] = None
+            leaflet["language"] = LEAFLET_LANGUAGE
             generated_at = datetime.now().isoformat()
             updated = await hass.async_add_executor_job(
                 database.save_leaflet, medicine_id, leaflet, generated_at

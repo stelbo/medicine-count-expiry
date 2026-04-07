@@ -710,6 +710,13 @@ class MedicineCountCard extends HTMLElement {
     const hasLeaflet = m.ai_leaflet ? ' title="Leaflet available – click for details"' : "";
     const confidenceBadge = m.confidence_score != null ? this._getConfidenceBadge(m.confidence_score) : "";
 
+    // Show default location badge when the user has not changed the location
+    const displayLocation = m.location || "unknown";
+    const isDefaultLocation = !m.location_changed_by_user && m.default_location;
+    const locationChip = isDefaultLocation
+      ? `<span class="meta-chip default-location-chip" title="Default location">📍 ${this._escHtml(displayLocation)} <span class="default-badge">default</span></span>`
+      : `<span class="meta-chip">📍 ${this._escHtml(displayLocation)}</span>`;
+
     return `
       <div class="medicine-item ${statusClass} clickable-item" data-id="${this._escHtml(m.medicine_id)}"${hasLeaflet}>
         <div class="medicine-status-bar"></div>
@@ -718,7 +725,7 @@ class MedicineCountCard extends HTMLElement {
             <div class="medicine-name">${this._escHtml(m.medicine_name)}${confidenceBadge}</div>
             <div class="medicine-meta">
               ${m.description ? `<span class="meta-chip">${this._escHtml(m.description)}</span>` : ""}
-              <span class="meta-chip">📍 ${this._escHtml(m.location || "unknown")}</span>
+              ${locationChip}
               <span class="meta-chip">📦 ×${m.quantity}</span>
               ${m.ai_verified ? `<span class="meta-chip ai-verified" title="AI verified (${Math.round((m.confidence_score || 0) * 100)}% confidence)">🤖 Verified</span>` : ""}
               ${m.ai_leaflet ? '<span class="meta-chip leaflet-chip">🇸🇰 Leaflet</span>' : ""}
@@ -946,11 +953,38 @@ class MedicineCountCard extends HTMLElement {
       })
       .join("");
 
-    const genInfo = generatedAt
-      ? `<div class="leaflet-generated-at">Generated: ${this._escHtml(generatedAt.substring(0, 10))}</div>`
+    const source = leaflet.source;
+    const sourceUrl = leaflet.source_url;
+    const language = leaflet.language;
+
+    const sourceHtml = source
+      ? `<div class="leaflet-meta-row">
+           <span class="leaflet-meta-label">Source:</span>
+           ${sourceUrl
+             ? `<a class="leaflet-source-link" href="${this._escHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${this._escHtml(source)} <span class="leaflet-link-icon">🔗</span></a>`
+             : `<span class="leaflet-meta-value">${this._escHtml(source)}</span>`}
+         </div>`
       : "";
 
-    return `<div class="leaflet-content">${rows}${genInfo}</div>`;
+    const languageHtml = language
+      ? `<div class="leaflet-meta-row">
+           <span class="leaflet-meta-label">Language:</span>
+           <span class="leaflet-meta-value">${this._escHtml(language)}</span>
+         </div>`
+      : "";
+
+    const genInfo = generatedAt
+      ? `<div class="leaflet-meta-row">
+           <span class="leaflet-meta-label">Last Updated:</span>
+           <span class="leaflet-meta-value">${this._escHtml(generatedAt.substring(0, 10))}</span>
+         </div>`
+      : "";
+
+    const metaSection = (sourceHtml || languageHtml || genInfo)
+      ? `<div class="leaflet-meta-section">${sourceHtml}${languageHtml}${genInfo}</div>`
+      : "";
+
+    return `<div class="leaflet-content">${metaSection}${rows}</div>`;
   }
 
   _renderLeafletValue(value) {
@@ -1076,15 +1110,24 @@ class MedicineCountCard extends HTMLElement {
 
     // Search – preserve focus and cursor position across re-render
     root.querySelector(".search-input")?.addEventListener("input", (e) => {
+      e.stopPropagation();
       const cursorPos = e.target.selectionStart;
       this._searchTerm = e.target.value;
       this._applyFilters();
       this.render();
-      const newInput = this.shadowRoot.querySelector(".search-input");
-      if (newInput) {
-        newInput.focus();
-        newInput.setSelectionRange(cursorPos, cursorPos);
-      }
+      requestAnimationFrame(() => {
+        if (!this.isConnected) return;
+        try {
+          const newInput = this.shadowRoot?.querySelector(".search-input");
+          if (newInput) {
+            newInput.focus();
+            newInput.setSelectionRange(cursorPos, cursorPos);
+          }
+        } catch (_) {}
+      });
+    });
+    root.querySelector(".search-input")?.addEventListener("keydown", (e) => {
+      e.stopPropagation();
     });
 
     // Status filter
@@ -1593,6 +1636,26 @@ class MedicineCountCard extends HTMLElement {
       .leaflet-row-text { font-size: 0.875rem; }
       .leaflet-generated-at { font-size: 0.7rem; color: var(--secondary-text-color, #999); margin-top: 8px; text-align: right; }
 
+      /* Leaflet source metadata */
+      .leaflet-meta-section {
+        background: var(--secondary-background-color, #f5f5f5);
+        border-radius: 6px; padding: 8px 10px; margin-bottom: 10px;
+        display: flex; flex-direction: column; gap: 4px;
+      }
+      .leaflet-meta-row {
+        display: flex; align-items: center; gap: 8px; font-size: 0.8rem;
+      }
+      .leaflet-meta-label {
+        font-weight: 600; min-width: 72px; color: var(--secondary-text-color, #555);
+      }
+      .leaflet-meta-value { color: var(--secondary-text-color, #666); }
+      .leaflet-source-link {
+        color: #2196F3; text-decoration: none;
+        display: flex; align-items: center; gap: 3px;
+      }
+      .leaflet-source-link:hover { text-decoration: underline; }
+      .leaflet-link-icon { font-size: 0.7rem; }
+
       /* Scan actions */
       .scan-actions { display: flex; gap: 8px; align-items: center; }
       .scan-row { margin-bottom: 12px; }
@@ -1722,6 +1785,14 @@ class MedicineCountCard extends HTMLElement {
 
       /* Opened meta chip */
       .opened-chip { background: #e3f2fd; color: #1565c0; }
+
+      /* Default location chip */
+      .default-location-chip { background: var(--secondary-background-color, #f0f0f0); color: var(--secondary-text-color, #555); }
+      .default-badge {
+        font-size: 0.6rem; padding: 1px 4px; border-radius: 8px;
+        background: #e8eaf6; color: #3949ab; margin-left: 3px;
+        font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+      }
 
       @media (max-width: 400px) {
         .summary-grid { grid-template-columns: repeat(2, 1fr); }

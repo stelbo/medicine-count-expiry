@@ -18,6 +18,7 @@ from .const import (
     ATTR_MEDICINE_NAME,
     ATTR_QUANTITY,
     DOMAIN,
+    EVENT_NOTIFICATION,
     SERVICE_ADD_MEDICINE,
     SERVICE_DELETE_MEDICINE,
     SERVICE_SCAN_IMAGE,
@@ -28,6 +29,34 @@ from .const import (
 from .storage.models import Medicine
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def trigger_notification(hass: HomeAssistant, notification_type: str, medicine) -> None:
+    """Fire a notification event on the HA event bus for automation triggers.
+
+    Fires ``medicine_count_expiry_notification`` with event data containing:
+    - ``type``: one of "medicine_expired", "medicine_expiring_soon",
+      "medicine_opened_too_long"
+    - ``medicine_name``: display name of the medicine
+    - ``medicine_id``: unique identifier
+    - ``expiry_date``: manufacturing expiry date (YYYY-MM-DD)
+    - ``open_expiry_date``: calculated open expiry date or None
+    """
+    hass.bus.async_fire(
+        EVENT_NOTIFICATION,
+        {
+            "type": notification_type,
+            "medicine_name": medicine.medicine_name,
+            "medicine_id": medicine.medicine_id,
+            "expiry_date": medicine.expiry_date,
+            "open_expiry_date": medicine.open_expiry_date,
+        },
+    )
+    _LOGGER.debug(
+        "Notification event fired: type=%s medicine=%s",
+        notification_type,
+        medicine.medicine_name,
+    )
 
 ADD_MEDICINE_SCHEMA = vol.Schema(
     {
