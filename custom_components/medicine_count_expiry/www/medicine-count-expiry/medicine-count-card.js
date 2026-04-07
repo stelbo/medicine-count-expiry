@@ -51,6 +51,8 @@ class MedicineCountCard extends HTMLElement {
     this._expiryScanning = false;
     this._expiryInputMethod = "manual";
     this._formData = {};
+    // Search debounce timer
+    this._searchDebounceTimer = null;
   }
 
   setConfig(config) {
@@ -71,6 +73,10 @@ class MedicineCountCard extends HTMLElement {
   disconnectedCallback() {
     if (this._refreshInterval) {
       clearInterval(this._refreshInterval);
+    }
+    if (this._searchDebounceTimer) {
+      clearTimeout(this._searchDebounceTimer);
+      this._searchDebounceTimer = null;
     }
   }
 
@@ -426,7 +432,7 @@ class MedicineCountCard extends HTMLElement {
           ${this._error ? `<div class="error-banner">${this._escHtml(this._error)}<button class="dismiss-error">✕</button></div>` : ""}
           ${this._renderSummary()}
           ${this._renderSearchBar()}
-          ${this._renderMedicineList()}
+          <div class="medicine-list-container">${this._renderMedicineList()}</div>
         </div>
       </ha-card>
       ${this._showAddForm ? this._renderModal() : ""}
@@ -818,6 +824,8 @@ class MedicineCountCard extends HTMLElement {
 
             ${this._renderOpeningDateSection(m)}
 
+            ${this._renderLeafletSourceSection(m)}
+
             <div class="leaflet-section">
               <div class="leaflet-header">
                 <span class="leaflet-title">🇸🇰 Príbalový leták (AI)</span>
@@ -834,6 +842,60 @@ class MedicineCountCard extends HTMLElement {
             <button class="btn btn-secondary close-detail">Close</button>
           </div>
         </div>
+      </div>
+    `;
+  }
+
+  _renderLeafletSourceSection(m) {
+    const leaflet = m.ai_leaflet;
+
+    // Determine source info: prefer ai_leaflet metadata, fall back to extraction info
+    const source = (leaflet && leaflet.source) || null;
+    const sourceUrl = (leaflet && leaflet.source_url) || null;
+    const language = (leaflet && leaflet.language) || null;
+    const generatedAt = m.ai_leaflet_generated_at || null;
+    const extractionSource = m.ai_extraction_source || null;
+    const extractionTimestamp = m.ai_extraction_timestamp || null;
+
+    // Only render this section if there is any source info to show
+    if (!source && !extractionSource && !generatedAt && !extractionTimestamp) {
+      return "";
+    }
+
+    const displaySource = source || extractionSource || null;
+    const displayDate = generatedAt
+      ? generatedAt.substring(0, 10)
+      : extractionTimestamp
+        ? extractionTimestamp.substring(0, 10)
+        : null;
+
+    const sourceRow = displaySource
+      ? `<div class="leaflet-source-row">
+           <span class="leaflet-source-label">Source:</span>
+           ${sourceUrl
+             ? `<a class="leaflet-source-link" href="${this._escHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${this._escHtml(displaySource)} <span class="leaflet-link-icon">🔗</span></a>`
+             : `<span class="leaflet-source-value">${this._escHtml(displaySource)}</span>`}
+         </div>`
+      : "";
+
+    const langRow = language
+      ? `<div class="leaflet-source-row">
+           <span class="leaflet-source-label">Language:</span>
+           <span class="leaflet-source-value">${this._escHtml(language)}</span>
+         </div>`
+      : "";
+
+    const dateRow = displayDate
+      ? `<div class="leaflet-source-row">
+           <span class="leaflet-source-label">Last Updated:</span>
+           <span class="leaflet-source-value">${this._escHtml(displayDate)}</span>
+         </div>`
+      : "";
+
+    return `
+      <div class="leaflet-source-section">
+        <div class="leaflet-source-header">📖 Package Leaflet Info</div>
+        ${sourceRow}${langRow}${dateRow}
       </div>
     `;
   }
@@ -1079,7 +1141,47 @@ class MedicineCountCard extends HTMLElement {
       .replace(/'/g, "&#039;");
   }
 
-  // ── Event listeners ───────────────────────────────────────────────────────
+  // Update only the medicine list portion of the DOM without re-rendering the whole card.
+  // This keeps the search input focused and the cursor position intact.
+  _renderMedicineListInPlace() {
+    const root = this.shadowRoot;
+    if (!root) return;
+    const container = root.querySelector(".medicine-list-container");
+    if (container) {
+      container.innerHTML = this._renderMedicineList();
+      // Re-attach click listeners for the newly rendered items
+      container.querySelectorAll(".delete-btn").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this._deleteMedicine(btn.dataset.id, btn.dataset.name);
+        });
+      });
+      container.querySelectorAll(".clickable-item").forEach((item) => {
+        item.addEventListener("click", () => {
+          const id = item.dataset.id;
+          const medicine = this._medicines.find((m) => m.medicine_id === id);
+          if (medicine) this._openDetail(medicine);
+        });
+      });
+    } else {
+      // Fallback: full re-render while preserving cursor position
+      const input = root.querySelector(".search-input");
+      const cursorPos = input ? input.selectionStart : null;
+      this.render();
+      if (cursorPos !== null) {
+        requestAnimationFrame(() => {
+          const newInput = this.shadowRoot?.querySelector(".search-input");
+          if (newInput) {
+            newInput.focus();
+            // setSelectionRange may throw on some input types – safe to ignore
+            try { newInput.setSelectionRange(cursorPos, cursorPos); } catch (_err) {}
+          }
+        });
+      }
+    }
+  }
+
+
 
   _attachEventListeners() {
     const root = this.shadowRoot;
@@ -1124,27 +1226,26 @@ class MedicineCountCard extends HTMLElement {
       });
     });
 
-    // Search – preserve focus and cursor position across re-render
-    root.querySelector(".search-input")?.addEventListener("input", (e) => {
-      e.stopPropagation();
-      const cursorPos = e.target.selectionStart;
-      this._searchTerm = e.target.value;
-      this._applyFilters();
-      this.render();
-      requestAnimationFrame(() => {
-        if (!this.isConnected) return;
-        try {
-          const newInput = this.shadowRoot?.querySelector(".search-input");
-          if (newInput) {
-            newInput.focus();
-            newInput.setSelectionRange(cursorPos, cursorPos);
-          }
-        } catch (_) {}
+    // Search – debounced filtering to avoid re-rendering (which loses focus)
+    const searchInput = root.querySelector(".search-input");
+    if (searchInput) {
+      searchInput.addEventListener("input", (e) => {
+        e.stopPropagation();
+        this._searchTerm = e.target.value;
+        // Clear any pending debounce timer
+        if (this._searchDebounceTimer) {
+          clearTimeout(this._searchDebounceTimer);
+        }
+        // Apply filters and re-render the medicine list only (not the whole card)
+        this._searchDebounceTimer = setTimeout(() => {
+          this._applyFilters();
+          this._renderMedicineListInPlace();
+        }, 150);
       });
-    });
-    root.querySelector(".search-input")?.addEventListener("keydown", (e) => {
-      e.stopPropagation();
-    });
+      searchInput.addEventListener("keydown", (e) => {
+        e.stopPropagation();
+      });
+    }
 
     // Status filter
     root.querySelector(".status-filter")?.addEventListener("change", (e) => {
@@ -1671,6 +1772,27 @@ class MedicineCountCard extends HTMLElement {
       }
       .leaflet-source-link:hover { text-decoration: underline; }
       .leaflet-link-icon { font-size: 0.7rem; }
+
+      /* Package Leaflet Info section (always-visible source block) */
+      .leaflet-source-section {
+        background: #f9f9f9;
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-top: 12px;
+        border-left: 4px solid #2196F3;
+      }
+      .leaflet-source-header {
+        font-size: 0.85rem; font-weight: 700;
+        color: #333; margin-bottom: 8px;
+      }
+      .leaflet-source-row {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 4px 0; font-size: 0.82rem;
+      }
+      .leaflet-source-label {
+        font-weight: 600; color: #666; min-width: 80px;
+      }
+      .leaflet-source-value { color: var(--secondary-text-color, #555); }
 
       /* Scan actions */
       .scan-actions { display: flex; gap: 8px; align-items: center; }

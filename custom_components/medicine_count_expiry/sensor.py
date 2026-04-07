@@ -173,17 +173,21 @@ class MedicineExpiredCountSensor(MedicineBaseSensor):
     async def async_update(self) -> None:
         """Update sensor state."""
         if self._search_engine:
-            expired = await self.hass.async_add_executor_job(self._search_engine.get_expired)
-            self._attr_native_value = len(expired)
+            summary = await self.hass.async_add_executor_job(self._search_engine.get_summary)
+            self._attr_native_value = summary["expired"]
             self._extra_attrs = {
+                "expired_manufacturing": summary.get("expired_manufacturing", 0),
+                "expired_opened_too_long": summary.get("expired_opened_too_long", 0),
                 "medicines": [
                     {
                         "name": m.medicine_name,
                         "expiry_date": m.expiry_date,
                         "location": m.location,
                     }
-                    for m in expired[:10]
-                ]
+                    for m in (await self.hass.async_add_executor_job(
+                        self._search_engine.get_expired
+                    ))[:10]
+                ],
             }
         else:
             self._attr_native_value = 0
@@ -206,10 +210,11 @@ class MedicineExpiringSoonCountSensor(MedicineBaseSensor):
     async def async_update(self) -> None:
         """Update sensor state."""
         if self._search_engine:
+            summary = await self.hass.async_add_executor_job(self._search_engine.get_summary)
+            self._attr_native_value = summary["expiring_soon"]
             expiring_soon = await self.hass.async_add_executor_job(
                 self._search_engine.get_expiring_soon
             )
-            self._attr_native_value = len(expiring_soon)
             self._extra_attrs = {
                 "medicines": [
                     {

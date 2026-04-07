@@ -124,7 +124,7 @@ class Medicine:
         try:
             expiry = date.fromisoformat(self.expiry_date)
             delta = (expiry - today).days
-            if delta < 0:
+            if delta <= 0:
                 return STATUS_EXPIRED
             elif delta <= warning_days:
                 return STATUS_EXPIRING_SOON
