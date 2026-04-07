@@ -160,3 +160,51 @@ def test_search_combined_filters(db, search_engine):
     results = search_engine.search(name="aspirin", location="bathroom")
     assert len(results) == 1
     assert results[0].medicine_id == m1.medicine_id
+
+
+def test_get_summary_opened_too_long_counted_in_expired(db, search_engine, sample_medicine):
+    """opened_too_long medicines should be counted in expired, not in good."""
+    from datetime import date, timedelta
+    past_open = (date.today() - timedelta(days=20)).isoformat()
+    opened_too_long = Medicine(
+        medicine_name="Paralen 200ml",
+        expiry_date="2099-01-01",
+        date_opened=past_open,
+        days_valid_after_opening=7,
+    )
+    db.add_medicine(sample_medicine)
+    db.add_medicine(opened_too_long)
+    summary = search_engine.get_summary()
+    assert summary["total"] == 2
+    assert summary["expired"] == 1
+    assert summary["expired_opened_too_long"] == 1
+    assert summary["expired_manufacturing"] == 0
+    assert summary["good"] == 1
+
+
+def test_get_summary_expired_breakdown(db, search_engine):
+    """get_summary() should include expired_manufacturing and expired_opened_too_long fields."""
+    from datetime import date, timedelta
+    past_open = (date.today() - timedelta(days=20)).isoformat()
+
+    mfg_expired = Medicine(medicine_name="OldDrug", expiry_date="2000-01-01")
+    opened_expired = Medicine(
+        medicine_name="Paralen",
+        expiry_date="2099-01-01",
+        date_opened=past_open,
+        days_valid_after_opening=7,
+    )
+    db.add_medicine(mfg_expired)
+    db.add_medicine(opened_expired)
+
+    summary = search_engine.get_summary()
+    assert summary["expired"] == 2
+    assert summary["expired_manufacturing"] == 1
+    assert summary["expired_opened_too_long"] == 1
+
+
+def test_get_summary_has_breakdown_fields(search_engine):
+    """get_summary() must always return expired_manufacturing and expired_opened_too_long keys."""
+    summary = search_engine.get_summary()
+    assert "expired_manufacturing" in summary
+    assert "expired_opened_too_long" in summary

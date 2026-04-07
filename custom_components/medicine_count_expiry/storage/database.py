@@ -290,6 +290,31 @@ class MedicineDatabase:
             rows = cursor.fetchall()
         return [self._row_to_medicine(row) for row in rows]
 
+    def get_medicines_by_status(self, status: str) -> List[Medicine]:
+        """Query medicines filtered by computed status.
+
+        Note: status is a computed field (not stored), so all medicines are
+        fetched and filtered in Python.
+        """
+        all_medicines = self.get_all_medicines()
+        return [m for m in all_medicines if m.get_status() == status]
+
+    def count_medicines_by_status(self) -> dict:
+        """Return count breakdown by computed status."""
+        from ..const import STATUS_EXPIRED, STATUS_EXPIRING_SOON, STATUS_GOOD, STATUS_OPENED_TOO_LONG
+        all_medicines = self.get_all_medicines()
+        counts: dict = {
+            STATUS_EXPIRED: 0,
+            STATUS_EXPIRING_SOON: 0,
+            STATUS_GOOD: 0,
+            STATUS_OPENED_TOO_LONG: 0,
+        }
+        for m in all_medicines:
+            status = m.get_status()
+            if status in counts:
+                counts[status] += 1
+        return counts
+
     def delete_older_than(self, days: int) -> int:
         """Delete medicine records added more than ``days`` days ago.
 

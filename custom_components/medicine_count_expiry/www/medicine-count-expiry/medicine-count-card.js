@@ -11,7 +11,7 @@ class MedicineCountCard extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this._medicines = [];
     this._filteredMedicines = [];
-    this._summary = { total: 0, expired: 0, expiring_soon: 0, good: 0 };
+    this._summary = { total: 0, expired: 0, expired_manufacturing: 0, expired_opened_too_long: 0, expiring_soon: 0, good: 0 };
     this._searchTerm = "";
     this._filterStatus = "all";
     this._filterLocation = "all";
@@ -105,7 +105,9 @@ class MedicineCountCard extends HTMLElement {
           (m.location || "").toLowerCase().includes(term)
       );
     }
-    if (this._filterStatus !== "all") {
+    if (this._filterStatus === "expired_all") {
+      result = result.filter((m) => m.status === "expired" || m.status === "opened_too_long");
+    } else if (this._filterStatus !== "all") {
       result = result.filter((m) => m.status === this._filterStatus);
     }
     if (this._filterLocation !== "all") {
@@ -614,23 +616,30 @@ class MedicineCountCard extends HTMLElement {
 
   _renderSummary() {
     const s = this._summary;
+    const mfg = s.expired_manufacturing || 0;
+    const opened = s.expired_opened_too_long || 0;
+    const hasBreakdown = mfg > 0 || opened > 0;
     return `
       <div class="summary-grid">
         <div class="summary-card total" data-filter="all">
           <div class="summary-value">${s.total}</div>
           <div class="summary-label">Total</div>
         </div>
-        <div class="summary-card expired" data-filter="expired">
+        <div class="summary-card expired" data-filter="expired_all">
           <div class="summary-value">${s.expired}</div>
-          <div class="summary-label">Expired</div>
+          <div class="summary-label">❌ Expired</div>
+          ${hasBreakdown ? `<div class="summary-breakdown" aria-label="Breakdown: ${mfg} manufacturing, ${opened} opened too long">
+            ${mfg > 0 ? `<span class="breakdown-item"><abbr title="Manufacturing">Mfg</abbr>: ${mfg}</span>` : ""}
+            ${opened > 0 ? `<span class="breakdown-item">Opened: ${opened}</span>` : ""}
+          </div>` : ""}
         </div>
         <div class="summary-card expiring" data-filter="expiring_soon">
           <div class="summary-value">${s.expiring_soon}</div>
-          <div class="summary-label">Expiring Soon</div>
+          <div class="summary-label">⚠️ Expiring Soon</div>
         </div>
         <div class="summary-card good" data-filter="good">
           <div class="summary-value">${s.good}</div>
-          <div class="summary-label">Good</div>
+          <div class="summary-label">✅ Good</div>
         </div>
       </div>
     `;
@@ -648,9 +657,11 @@ class MedicineCountCard extends HTMLElement {
         />
         <select class="filter-select status-filter">
           <option value="all" ${this._filterStatus === "all" ? "selected" : ""}>All Status</option>
-          <option value="good" ${this._filterStatus === "good" ? "selected" : ""}>Good</option>
-          <option value="expiring_soon" ${this._filterStatus === "expiring_soon" ? "selected" : ""}>Expiring Soon</option>
-          <option value="expired" ${this._filterStatus === "expired" ? "selected" : ""}>Expired</option>
+          <option value="good" ${this._filterStatus === "good" ? "selected" : ""}>✅ Good</option>
+          <option value="expiring_soon" ${this._filterStatus === "expiring_soon" ? "selected" : ""}>⚠️ Expiring Soon</option>
+          <option value="expired_all" ${this._filterStatus === "expired_all" ? "selected" : ""}>❌ Expired (All)</option>
+          <option value="expired" ${this._filterStatus === "expired" ? "selected" : ""}>❌ Expired - Manufacturing</option>
+          <option value="opened_too_long" ${this._filterStatus === "opened_too_long" ? "selected" : ""}>⚠️ Opened Too Long</option>
         </select>
         <select class="filter-select location-filter">
           ${locations
@@ -695,7 +706,7 @@ class MedicineCountCard extends HTMLElement {
       : m.status === "expiring_soon" ? "Expiring Soon"
       : m.status === "opened_too_long" ? "Opened Too Long"
       : "Good";
-    const daysInfo = this._getDaysInfo(m.expiry_date);
+    const daysInfo = this._getSmartDaysText(m);
     const hasLeaflet = m.ai_leaflet ? ' title="Leaflet available – click for details"' : "";
     const confidenceBadge = m.confidence_score != null ? this._getConfidenceBadge(m.confidence_score) : "";
 
@@ -713,10 +724,10 @@ class MedicineCountCard extends HTMLElement {
               ${m.ai_leaflet ? '<span class="meta-chip leaflet-chip">🇸🇰 Leaflet</span>' : ""}
               ${m.date_opened ? '<span class="meta-chip opened-chip">📂 Opened</span>' : ""}
             </div>
+            <div class="medicine-countdown ${statusClass}" role="status" aria-live="polite">${this._escHtml(daysInfo)}</div>
           </div>
           <div class="medicine-expiry">
             <div class="expiry-date">${this._escHtml(m.expiry_date)}</div>
-            <div class="expiry-days ${statusClass}">${daysInfo}</div>
             <span class="status-badge ${statusClass}">${statusLabel}</span>
           </div>
           <button class="delete-btn icon-btn" data-id="${this._escHtml(m.medicine_id)}" data-name="${this._escHtml(m.medicine_name)}" title="Delete">🗑</button>
@@ -970,6 +981,42 @@ class MedicineCountCard extends HTMLElement {
     } catch {
       return "";
     }
+  }
+
+  _getSmartDaysText(m) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Opened Too Long: show opening-based countdown
+    if (m.status === "opened_too_long" && m.days_valid_after_opening != null) {
+      if (m.open_expiry_date) {
+        const openExpiry = new Date(m.open_expiry_date);
+        openExpiry.setHours(0, 0, 0, 0);
+        const daysOverdue = Math.round((today - openExpiry) / 86400000);
+        return `Valid after opening: ${m.days_valid_after_opening}d, ${daysOverdue}d overdue`;
+      }
+      return `Valid after opening: ${m.days_valid_after_opening}d`;
+    }
+
+    // Opened but still good/expiring: show open-expiry countdown
+    if (m.date_opened && m.days_valid_after_opening != null && m.open_expiry_date &&
+        (m.status === "good" || m.status === "expiring_soon")) {
+      const openExpiry = new Date(m.open_expiry_date);
+      openExpiry.setHours(0, 0, 0, 0);
+      const daysRemaining = Math.round((openExpiry - today) / 86400000);
+      return `Valid after opening: ${m.days_valid_after_opening}d, ${daysRemaining}d remaining`;
+    }
+
+    // Expired (manufacturing): show days since expiry
+    if (m.status === "expired") {
+      const mfgExpiry = new Date(m.expiry_date);
+      mfgExpiry.setHours(0, 0, 0, 0);
+      const daysExpired = Math.round((today - mfgExpiry) / 86400000);
+      return `Expired ${daysExpired} day${daysExpired !== 1 ? "s" : ""} ago`;
+    }
+
+    // Default: manufacturing expiry countdown
+    return this._getDaysInfo(m.expiry_date);
   }
 
   _escHtml(str) {
@@ -1297,6 +1344,16 @@ class MedicineCountCard extends HTMLElement {
       .summary-card.expired .summary-value { color: var(--color-expired); }
       .summary-card.expiring .summary-value { color: var(--color-expiring); }
       .summary-card.good .summary-value { color: var(--color-good); }
+      .summary-breakdown {
+        display: flex; flex-wrap: wrap; justify-content: center; gap: 2px;
+        margin-top: 4px; padding-top: 4px;
+        border-top: 1px solid rgba(229, 57, 53, 0.2);
+      }
+      .breakdown-item {
+        font-size: 0.62rem; color: var(--color-expired); font-weight: 500;
+        background: rgba(229, 57, 53, 0.08); border-radius: 8px;
+        padding: 1px 5px; white-space: nowrap;
+      }
 
       /* Search bar */
       .search-bar {
@@ -1462,6 +1519,15 @@ class MedicineCountCard extends HTMLElement {
       .status-badge.status-opened-too-long { background: #fff3e0; color: #e65100; }
       .delete-btn { color: #bbb; font-size: 0.95rem; }
       .delete-btn:hover { color: var(--color-expired); background: #ffebee; }
+
+      /* Smart countdown text on medicine list card */
+      .medicine-countdown {
+        font-size: 0.72rem; font-weight: 500; margin-top: 4px;
+      }
+      .medicine-countdown.status-expired { color: var(--color-expired); }
+      .medicine-countdown.status-expiring { color: var(--color-expiring); }
+      .medicine-countdown.status-good { color: var(--color-good); }
+      .medicine-countdown.status-opened-too-long { color: #e65100; }
 
       /* Empty state */
       .empty-state { text-align: center; padding: 32px 16px; color: var(--secondary-text-color, #888); }

@@ -338,3 +338,61 @@ def test_from_dict_loads_open_fields():
     m = Medicine.from_dict(data)
     assert m.date_opened == "2026-06-01"
     assert m.days_valid_after_opening == 14
+
+
+# ── Database query helper tests ───────────────────────────────────────────────
+
+def test_get_medicines_by_status_expired(db, expired_medicine, sample_medicine):
+    """get_medicines_by_status('expired') should return only manufacturing-expired medicines."""
+    db.add_medicine(expired_medicine)
+    db.add_medicine(sample_medicine)
+    results = db.get_medicines_by_status("expired")
+    assert len(results) == 1
+    assert results[0].medicine_id == expired_medicine.medicine_id
+
+
+def test_get_medicines_by_status_good(db, expired_medicine, sample_medicine):
+    """get_medicines_by_status('good') should return only good medicines."""
+    db.add_medicine(expired_medicine)
+    db.add_medicine(sample_medicine)
+    results = db.get_medicines_by_status("good")
+    assert len(results) == 1
+    assert results[0].medicine_id == sample_medicine.medicine_id
+
+
+def test_get_medicines_by_status_opened_too_long(db):
+    """get_medicines_by_status('opened_too_long') should return opened-too-long medicines."""
+    from datetime import date, timedelta
+    past_open = (date.today() - timedelta(days=20)).isoformat()
+    opened = Medicine(
+        medicine_name="Paralen",
+        expiry_date="2099-01-01",
+        date_opened=past_open,
+        days_valid_after_opening=7,
+    )
+    good = Medicine(medicine_name="GoodDrug", expiry_date="2099-01-01")
+    db.add_medicine(opened)
+    db.add_medicine(good)
+    results = db.get_medicines_by_status("opened_too_long")
+    assert len(results) == 1
+    assert results[0].medicine_id == opened.medicine_id
+
+
+def test_count_medicines_by_status(db, expired_medicine, sample_medicine):
+    """count_medicines_by_status should return correct counts per status."""
+    db.add_medicine(expired_medicine)
+    db.add_medicine(sample_medicine)
+    counts = db.count_medicines_by_status()
+    assert counts["expired"] == 1
+    assert counts["good"] == 1
+    assert counts["expiring_soon"] == 0
+    assert counts["opened_too_long"] == 0
+
+
+def test_count_medicines_by_status_empty(db):
+    """count_medicines_by_status on empty DB should return all zeros."""
+    counts = db.count_medicines_by_status()
+    assert counts["expired"] == 0
+    assert counts["good"] == 0
+    assert counts["expiring_soon"] == 0
+    assert counts["opened_too_long"] == 0
