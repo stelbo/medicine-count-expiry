@@ -246,4 +246,40 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, SERVICE_SCAN_IMAGE, handle_scan_image, schema=SCAN_IMAGE_SCHEMA
     )
+
+    # ── Notification service (visible in HA automations as a "Service called" trigger) ──
+
+    NOTIFICATION_SCHEMA = vol.Schema(
+        {
+            vol.Required("message"): cv.string,
+            vol.Optional("medicine_name"): cv.string,
+            vol.Optional("event_type", default="notification"): cv.string,
+        }
+    )
+
+    async def handle_send_notification(call: ServiceCall) -> None:
+        """Handle medicine_count_expiry_notification service call.
+
+        Fires ``medicine_count_expiry_notification`` on the HA event bus so
+        automations can react to it via the "Event" trigger type.
+        """
+        hass.bus.async_fire(
+            EVENT_NOTIFICATION,
+            {
+                "type": call.data.get("event_type", "notification"),
+                "message": call.data["message"],
+                "medicine_name": call.data.get("medicine_name"),
+            },
+        )
+        _LOGGER.info(
+            "Medicine notification service called: %s", call.data.get("message", "")
+        )
+
+    hass.services.async_register(
+        "notify",
+        f"{DOMAIN}_notification",
+        handle_send_notification,
+        schema=NOTIFICATION_SCHEMA,
+    )
+
     _LOGGER.info("Medicine Count & Expiry services registered")

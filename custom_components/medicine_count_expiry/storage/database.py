@@ -283,22 +283,23 @@ class MedicineDatabase:
         return [self._row_to_medicine(row) for row in rows]
 
     def get_expiring_medicines(self, days: int) -> List[Medicine]:
-        """Get medicines expiring within the given number of days."""
+        """Get medicines expiring within the given number of days (excluding today, which is expired)."""
         from datetime import date, timedelta
         today = date.today()
+        tomorrow = today + timedelta(days=1)
         future = today + timedelta(days=days)
         return self.search_medicines(
             expiry_before=future.isoformat(),
-            expiry_after=today.isoformat(),
+            expiry_after=tomorrow.isoformat(),
         )
 
     def get_expired_medicines(self) -> List[Medicine]:
-        """Get all expired medicines."""
+        """Get all expired medicines (including those expiring today)."""
         from datetime import date
         today = date.today().isoformat()
         with sqlite3.connect(self._db_path) as conn:
             cursor = conn.execute(
-                "SELECT * FROM medicines WHERE expiry_date < ? ORDER BY expiry_date ASC",
+                "SELECT * FROM medicines WHERE expiry_date <= ? ORDER BY expiry_date ASC",
                 (today,),
             )
             rows = cursor.fetchall()

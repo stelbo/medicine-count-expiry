@@ -180,3 +180,38 @@ scan_image:
       example: "https://example.com/medicine-label.jpg"
       selector:
         text:
+
+medicine_count_expiry_notification:
+  name: Medicine Count Expiry Notification
+  description: >
+    Send a notification for medicine expiry events. The notification is fired
+    as a home assistant event that can be used in automations. This service is
+    registered under the notify domain as notify.medicine_count_expiry_notification.
+  fields:
+    message:
+      name: Message
+      description: The notification message text.
+      required: true
+      example: "Paralen 200ml expires in 7 days"
+      selector:
+        text:
+    medicine_name:
+      name: Medicine Name
+      description: Optional name of the medicine related to this notification.
+      required: false
+      example: "Paralen 200ml"
+      selector:
+        text:
+    event_type:
+      name: Event Type
+      description: Type of expiry event (notification, expired, expiring_soon, opened_too_long).
+      required: false
+      default: "notification"
+      example: "expiring_soon"
+      selector:
+        select:
+          options:
+            - notification
+            - expired
+            - expiring_soon
+            - opened_too_long
