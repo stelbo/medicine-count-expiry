@@ -42,11 +42,6 @@ async def trigger_notification(hass: HomeAssistant, notification_type: str, medi
     - ``expiry_date``: manufacturing expiry date (YYYY-MM-DD)
     - ``open_expiry_date``: calculated open expiry date or None
     """
-    open_expiry = (
-        medicine._compute_open_expiry_date()
-        if hasattr(medicine, "_compute_open_expiry_date")
-        else None
-    )
     hass.bus.async_fire(
         EVENT_NOTIFICATION,
         {
@@ -54,7 +49,7 @@ async def trigger_notification(hass: HomeAssistant, notification_type: str, medi
             "medicine_name": medicine.medicine_name,
             "medicine_id": medicine.medicine_id,
             "expiry_date": medicine.expiry_date,
-            "open_expiry_date": open_expiry,
+            "open_expiry_date": medicine.open_expiry_date,
         },
     )
     _LOGGER.debug(

@@ -42,6 +42,11 @@ class Medicine:
         if self.default_location is None:
             self.default_location = self.location
 
+    @property
+    def open_expiry_date(self) -> Optional[str]:
+        """Return the computed open expiry date (public accessor)."""
+        return self._compute_open_expiry_date()
+
     def _compute_open_expiry_date(self) -> Optional[str]:
         """Compute open expiry date from date_opened + days_valid_after_opening."""
         if self.date_opened and self.days_valid_after_opening is not None:

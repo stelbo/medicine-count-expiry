@@ -123,9 +123,6 @@ class MedicineDatabase:
     def add_medicine(self, medicine: Medicine) -> Medicine:
         """Add a new medicine to the database."""
         ai_leaflet_json = json.dumps(medicine.ai_leaflet) if medicine.ai_leaflet is not None else None
-        # Ensure default_location is set from location when not explicitly provided
-        if medicine.default_location is None:
-            medicine.default_location = medicine.location
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
                 """INSERT INTO medicines

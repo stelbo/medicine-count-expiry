@@ -90,6 +90,13 @@ class MedicineTotalCountSensor(MedicineBaseSensor):
     _attr_icon = "mdi:pill"
     _attr_native_unit_of_measurement = "medicines"
 
+    def __init__(self, hass: HomeAssistant, search_engine) -> None:
+        """Initialize the total-count sensor."""
+        super().__init__(hass, search_engine)
+        # Tracks the last-notified status per medicine_id so events only fire on
+        # status transitions (not on every sensor poll).
+        self._last_notified_status: dict[str, str] = {}
+
     async def async_update(self) -> None:
         """Update sensor state."""
         if self._search_engine:
@@ -107,30 +114,48 @@ class MedicineTotalCountSensor(MedicineBaseSensor):
             self._extra_attrs = {}
 
     async def _fire_notification_events(self) -> None:
-        """Fire HA bus notification events for medicines requiring attention."""
+        """Fire HA bus notification events for medicines requiring attention.
+
+        Events are only fired when a medicine's notification-worthy status
+        changes (transition into the condition), preventing repeated events on
+        every sensor poll.
+        """
         all_medicines = await self.hass.async_add_executor_job(
             self._search_engine.get_all
         )
         today = date.today()
+        # Build a set of currently active medicine IDs so we can clean up stale entries
+        active_ids = {m.medicine_id for m in all_medicines}
+        # Remove medicines that no longer exist
+        for gone_id in set(self._last_notified_status) - active_ids:
+            del self._last_notified_status[gone_id]
+
         for medicine in all_medicines:
             status = medicine.get_status()
+            notification_type: str | None = None
+
             if status == STATUS_EXPIRED:
-                await trigger_notification(self.hass, NOTIFICATION_TYPE_EXPIRED, medicine)
+                notification_type = NOTIFICATION_TYPE_EXPIRED
             elif status == STATUS_OPENED_TOO_LONG:
-                await trigger_notification(
-                    self.hass, NOTIFICATION_TYPE_OPENED_TOO_LONG, medicine
-                )
+                notification_type = NOTIFICATION_TYPE_OPENED_TOO_LONG
             else:
                 # Check manufacturing expiry within the short notification window
                 try:
                     expiry = date.fromisoformat(medicine.expiry_date)
                     days_until = (expiry - today).days
                     if 0 <= days_until <= NOTIFICATION_EXPIRY_SOON_DAYS:
-                        await trigger_notification(
-                            self.hass, NOTIFICATION_TYPE_EXPIRING_SOON, medicine
-                        )
+                        notification_type = NOTIFICATION_TYPE_EXPIRING_SOON
                 except (ValueError, TypeError):
                     pass
+
+            prev = self._last_notified_status.get(medicine.medicine_id)
+            if notification_type is not None and prev != notification_type:
+                await trigger_notification(self.hass, notification_type, medicine)
+                self._last_notified_status[medicine.medicine_id] = notification_type
+            elif notification_type is None and prev is not None:
+                # Medicine returned to a non-alerting state; reset so it can
+                # fire again if it re-enters an alert condition.
+                del self._last_notified_status[medicine.medicine_id]
 
 
 class MedicineExpiredCountSensor(MedicineBaseSensor):
