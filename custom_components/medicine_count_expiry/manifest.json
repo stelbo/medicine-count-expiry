@@ -1,7 +1,7 @@
 {
   "domain": "medicine_count_expiry",
   "name": "Medicine Count & Expiry",
-  "version": "1.0.33",
+  "version": "1.0.34",
   "documentation": "https://github.com/stelbo/medicine-count-expiry",
   "issue_tracker": "https://github.com/stelbo/medicine-count-expiry/issues",
   "requirements": ["anthropic>=0.30.0"],
