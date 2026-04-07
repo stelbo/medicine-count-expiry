@@ -187,7 +187,7 @@ class MedicineLeafletView(HomeAssistantView):
             leaflet = await claude_verifier.generate_leaflet(medicine.medicine_name)
             # Annotate the leaflet with source metadata
             leaflet["source"] = LEAFLET_SOURCE_NAME
-            leaflet["source_url"] = None
+            leaflet["source_url"] = medicine.leaflet_url
             leaflet["language"] = LEAFLET_LANGUAGE
             generated_at = datetime.now().isoformat()
             updated = await hass.async_add_executor_job(
