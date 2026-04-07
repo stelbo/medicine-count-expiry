@@ -1116,11 +1116,14 @@ class MedicineCountCard extends HTMLElement {
       this._applyFilters();
       this.render();
       requestAnimationFrame(() => {
-        const newInput = this.shadowRoot.querySelector(".search-input");
-        if (newInput) {
-          newInput.focus();
-          newInput.setSelectionRange(cursorPos, cursorPos);
-        }
+        if (!this.isConnected) return;
+        try {
+          const newInput = this.shadowRoot?.querySelector(".search-input");
+          if (newInput) {
+            newInput.focus();
+            newInput.setSelectionRange(cursorPos, cursorPos);
+          }
+        } catch (_) {}
       });
     });
     root.querySelector(".search-input")?.addEventListener("keydown", (e) => {

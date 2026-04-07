@@ -62,6 +62,10 @@ NOTIFICATION_TYPE_OPENED_TOO_LONG = "medicine_opened_too_long"
 # Days before manufacturing expiry to fire "expiring soon" notification events
 NOTIFICATION_EXPIRY_SOON_DAYS = 7
 
+# Leaflet generation metadata
+LEAFLET_SOURCE_NAME = "Claude AI"
+LEAFLET_LANGUAGE = "Slovak"
+
 # Services
 SERVICE_ADD_MEDICINE = "add_medicine"
 SERVICE_UPDATE_MEDICINE = "update_medicine"

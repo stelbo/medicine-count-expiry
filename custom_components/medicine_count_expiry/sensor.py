@@ -95,6 +95,10 @@ class MedicineTotalCountSensor(MedicineBaseSensor):
         super().__init__(hass, search_engine)
         # Tracks the last-notified status per medicine_id so events only fire on
         # status transitions (not on every sensor poll).
+        # Note: this state is in-memory only and resets on HA restart, which means
+        # notification events for already-alerting medicines will re-fire once after
+        # a restart.  This is intentional – it ensures automations are not silently
+        # skipped after a reboot.
         self._last_notified_status: dict[str, str] = {}
 
     async def async_update(self) -> None:

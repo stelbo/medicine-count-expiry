@@ -38,7 +38,14 @@ class Medicine:
     location_changed_by_user: bool = False  # True when user explicitly changed location
 
     def __post_init__(self) -> None:
-        """Set default_location from location if not explicitly provided."""
+        """Set default_location from location when not explicitly provided.
+
+        This runs when a Medicine is first created without a default_location
+        (e.g. from ``Medicine.from_dict()`` with a fresh record).  On subsequent
+        loads from the database ``from_dict`` always passes the stored
+        ``default_location``, so this branch is skipped and the original value
+        is preserved.
+        """
         if self.default_location is None:
             self.default_location = self.location
 

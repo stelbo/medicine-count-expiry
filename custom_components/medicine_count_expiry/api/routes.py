@@ -9,7 +9,7 @@ from functools import partial
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 
-from ..const import DOMAIN
+from ..const import DOMAIN, LEAFLET_LANGUAGE, LEAFLET_SOURCE_NAME
 from ..storage.models import Medicine
 
 _LOGGER = logging.getLogger(__name__)
@@ -186,9 +186,9 @@ class MedicineLeafletView(HomeAssistantView):
         try:
             leaflet = await claude_verifier.generate_leaflet(medicine.medicine_name)
             # Annotate the leaflet with source metadata
-            leaflet["source"] = "Claude AI"
+            leaflet["source"] = LEAFLET_SOURCE_NAME
             leaflet["source_url"] = None
-            leaflet["language"] = "Slovak"
+            leaflet["language"] = LEAFLET_LANGUAGE
             generated_at = datetime.now().isoformat()
             updated = await hass.async_add_executor_job(
                 database.save_leaflet, medicine_id, leaflet, generated_at
