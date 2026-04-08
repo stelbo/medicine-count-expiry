@@ -8,9 +8,11 @@ from functools import partial
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from ..const import DOMAIN, LEAFLET_LANGUAGE, LEAFLET_SOURCE_NAME
 from ..storage.models import Medicine
+from ..ai.claude_verifier import search_drmax_url
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -185,13 +187,20 @@ class MedicineLeafletView(HomeAssistantView):
 
         try:
             leaflet = await claude_verifier.generate_leaflet(medicine.medicine_name)
+            # Search for the medicine on DrMax.sk pharmacy to get a source URL
+            try:
+                session = async_get_clientsession(hass)
+                source_url = await search_drmax_url(session, medicine.medicine_name)
+            except Exception as url_err:
+                _LOGGER.warning("Could not fetch pharmacy URL for %s: %s", medicine.medicine_name, url_err)
+                source_url = None
             # Annotate the leaflet with source metadata
             leaflet["source"] = LEAFLET_SOURCE_NAME
-            leaflet["source_url"] = medicine.leaflet_url
+            leaflet["source_url"] = source_url
             leaflet["language"] = LEAFLET_LANGUAGE
             generated_at = datetime.now().isoformat()
             updated = await hass.async_add_executor_job(
-                database.save_leaflet, medicine_id, leaflet, generated_at
+                database.save_leaflet, medicine_id, leaflet, generated_at, source_url
             )
             if not updated:
                 return web.json_response({"error": "Failed to save leaflet"}, status=500)

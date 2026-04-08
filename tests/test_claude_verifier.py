@@ -930,3 +930,81 @@ async def test_verify_medicine_retries_on_529(verifier, monkeypatch):
 
     assert call_count == 2
     assert result["verified"] is True
+
+
+# ── search_drmax_url tests ─────────────────────────────────────────────────────
+
+from custom_components.medicine_count_expiry.ai.claude_verifier import search_drmax_url
+
+
+@pytest.mark.asyncio
+async def test_search_drmax_url_returns_product_url():
+    """search_drmax_url should return the first product URL extracted from the page HTML."""
+    import aiohttp
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    html_with_product = '''
+    <html><body>
+    <a href="https://www.drmax.sk/paracetamol-500mg-tablets-20.html">Paracetamol</a>
+    </body></html>
+    '''
+
+    mock_resp = AsyncMock()
+    mock_resp.status = 200
+    mock_resp.text = AsyncMock(return_value=html_with_product)
+    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+    mock_session = MagicMock()
+    mock_session.get = MagicMock(return_value=mock_resp)
+
+    result = await search_drmax_url(mock_session, "Paracetamol 500mg")
+
+    assert "drmax.sk" in result
+    assert result != "https://www.drmax.sk/search/?string=Paracetamol%20500mg"
+
+
+@pytest.mark.asyncio
+async def test_search_drmax_url_falls_back_on_no_match():
+    """search_drmax_url should return the search URL when no product URL is found."""
+    html_no_products = "<html><body><p>No results</p></body></html>"
+
+    mock_resp = AsyncMock()
+    mock_resp.status = 200
+    mock_resp.text = AsyncMock(return_value=html_no_products)
+    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+    mock_session = MagicMock()
+    mock_session.get = MagicMock(return_value=mock_resp)
+
+    result = await search_drmax_url(mock_session, "UnknownMedicine XYZ")
+
+    assert result == "https://www.drmax.sk/search/?string=UnknownMedicine%20XYZ"
+
+
+@pytest.mark.asyncio
+async def test_search_drmax_url_falls_back_on_http_error():
+    """search_drmax_url should return search URL when HTTP response is not 200."""
+    mock_resp = AsyncMock()
+    mock_resp.status = 503
+    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+    mock_session = MagicMock()
+    mock_session.get = MagicMock(return_value=mock_resp)
+
+    result = await search_drmax_url(mock_session, "Ibuprofen 400mg")
+
+    assert result == "https://www.drmax.sk/search/?string=Ibuprofen%20400mg"
+
+
+@pytest.mark.asyncio
+async def test_search_drmax_url_falls_back_on_exception():
+    """search_drmax_url should return search URL when an exception occurs."""
+    mock_session = MagicMock()
+    mock_session.get = MagicMock(side_effect=Exception("connection refused"))
+
+    result = await search_drmax_url(mock_session, "Aspirin 100mg")
+
+    assert result == "https://www.drmax.sk/search/?string=Aspirin%20100mg"

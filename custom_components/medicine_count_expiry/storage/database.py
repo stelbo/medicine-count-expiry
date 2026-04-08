@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS medicines (
     date_opened TEXT DEFAULT NULL,
     days_valid_after_opening INTEGER DEFAULT NULL,
     default_location TEXT DEFAULT NULL,
-    location_changed_by_user INTEGER DEFAULT 0
+    location_changed_by_user INTEGER DEFAULT 0,
+    leaflet_url TEXT DEFAULT NULL
 )
 """
 
@@ -52,6 +53,7 @@ _MIGRATE_SQL = [
     "ALTER TABLE medicines ADD COLUMN days_valid_after_opening INTEGER DEFAULT NULL",
     "ALTER TABLE medicines ADD COLUMN default_location TEXT DEFAULT NULL",
     "ALTER TABLE medicines ADD COLUMN location_changed_by_user INTEGER DEFAULT 0",
+    "ALTER TABLE medicines ADD COLUMN leaflet_url TEXT DEFAULT NULL",
 ]
 
 
@@ -98,6 +100,7 @@ class MedicineDatabase:
                 days_valid_after_opening = None
         default_location = row[17] if len(row) > 17 else None
         location_changed_by_user = bool(row[18]) if len(row) > 18 else False
+        leaflet_url = row[19] if len(row) > 19 else None
         return Medicine(
             medicine_id=row[0],
             medicine_name=row[1],
@@ -118,6 +121,7 @@ class MedicineDatabase:
             days_valid_after_opening=days_valid_after_opening,
             default_location=default_location,
             location_changed_by_user=location_changed_by_user,
+            leaflet_url=leaflet_url,
         )
 
     def add_medicine(self, medicine: Medicine) -> Medicine:
@@ -130,8 +134,8 @@ class MedicineDatabase:
                     location, image_url, ai_verified, confidence_score, added_date, updated_date,
                     ai_leaflet, ai_leaflet_generated_at, ai_extraction_source, ai_extraction_timestamp,
                     date_opened, days_valid_after_opening,
-                    default_location, location_changed_by_user)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    default_location, location_changed_by_user, leaflet_url)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     medicine.medicine_id,
                     medicine.medicine_name,
@@ -152,6 +156,7 @@ class MedicineDatabase:
                     medicine.days_valid_after_opening,
                     medicine.default_location,
                     int(medicine.location_changed_by_user),
+                    medicine.leaflet_url,
                 ),
             )
             conn.commit()
@@ -170,7 +175,8 @@ class MedicineDatabase:
                    ai_leaflet=?, ai_leaflet_generated_at=?,
                    ai_extraction_source=?, ai_extraction_timestamp=?,
                    date_opened=?, days_valid_after_opening=?,
-                   default_location=?, location_changed_by_user=?
+                   default_location=?, location_changed_by_user=?,
+                   leaflet_url=?
                    WHERE medicine_id=?""",
                 (
                     medicine.medicine_name,
@@ -190,6 +196,7 @@ class MedicineDatabase:
                     medicine.days_valid_after_opening,
                     medicine.default_location,
                     int(medicine.location_changed_by_user),
+                    medicine.leaflet_url,
                     medicine.medicine_id,
                 ),
             )
@@ -199,13 +206,14 @@ class MedicineDatabase:
         _LOGGER.info("Updated medicine: %s", medicine.medicine_name)
         return medicine
 
-    def save_leaflet(self, medicine_id: str, leaflet: dict, generated_at: str) -> Optional[Medicine]:
+    def save_leaflet(self, medicine_id: str, leaflet: dict, generated_at: str, source_url: Optional[str] = None) -> Optional[Medicine]:
         """Save a generated leaflet for a medicine and return the updated record."""
         ai_leaflet_json = json.dumps(leaflet)
         with sqlite3.connect(self._db_path) as conn:
             cursor = conn.execute(
-                "UPDATE medicines SET ai_leaflet=?, ai_leaflet_generated_at=? WHERE medicine_id=?",
-                (ai_leaflet_json, generated_at, medicine_id),
+                """UPDATE medicines SET ai_leaflet=?, ai_leaflet_generated_at=?, leaflet_url=?
+                   WHERE medicine_id=?""",
+                (ai_leaflet_json, generated_at, source_url, medicine_id),
             )
             conn.commit()
             if cursor.rowcount == 0:

@@ -448,3 +448,76 @@ def test_default_location_not_overwritten_on_update(db, sample_medicine):
     result = db.get_medicine(sample_medicine.medicine_id)
     assert result.default_location == "bathroom"  # original
     assert result.location == "kitchen"            # updated
+
+
+# ── leaflet_url / pharmacy source URL tests ────────────────────────────────────
+
+def test_leaflet_url_none_by_default(db):
+    """A new medicine should have leaflet_url as None."""
+    m = Medicine(medicine_name="Test Drug", expiry_date="2099-01-01")
+    db.add_medicine(m)
+    retrieved = db.get_medicine(m.medicine_id)
+    assert retrieved.leaflet_url is None
+
+
+def test_leaflet_url_roundtrip(db):
+    """leaflet_url set on Medicine should survive a database round-trip."""
+    m = Medicine(
+        medicine_name="Ibuprofen 400mg",
+        expiry_date="2099-01-01",
+        leaflet_url="https://www.drmax.sk/ibuprofen-400mg/p_12345/",
+    )
+    db.add_medicine(m)
+    retrieved = db.get_medicine(m.medicine_id)
+    assert retrieved.leaflet_url == "https://www.drmax.sk/ibuprofen-400mg/p_12345/"
+
+
+def test_save_leaflet_stores_source_url(db):
+    """save_leaflet with source_url should persist leaflet_url on the medicine."""
+    m = Medicine(medicine_name="Paracetamol 500mg", expiry_date="2099-01-01")
+    db.add_medicine(m)
+
+    leaflet = {"pouzitie": "Úľava od bolesti", "source": "Claude AI", "source_url": None}
+    pharmacy_url = "https://www.drmax.sk/paracetamol-500mg/p_99999/"
+    generated_at = "2025-06-01T10:00:00"
+
+    updated = db.save_leaflet(m.medicine_id, leaflet, generated_at, source_url=pharmacy_url)
+    assert updated is not None
+    assert updated.leaflet_url == pharmacy_url
+
+    # Also verify it persists on fresh read
+    retrieved = db.get_medicine(m.medicine_id)
+    assert retrieved.leaflet_url == pharmacy_url
+
+
+def test_save_leaflet_without_source_url_keeps_none(db):
+    """save_leaflet without source_url should leave leaflet_url as None."""
+    m = Medicine(medicine_name="Aspirin 100mg", expiry_date="2099-01-01")
+    db.add_medicine(m)
+
+    leaflet = {"pouzitie": "Test"}
+    updated = db.save_leaflet(m.medicine_id, leaflet, "2025-06-01T10:00:00")
+    assert updated is not None
+    assert updated.leaflet_url is None
+
+
+def test_leaflet_url_in_to_dict(db):
+    """to_dict should include leaflet_url field."""
+    m = Medicine(
+        medicine_name="Drug",
+        expiry_date="2099-01-01",
+        leaflet_url="https://www.drmax.sk/drug/p_1/",
+    )
+    d = m.to_dict()
+    assert "leaflet_url" in d
+    assert d["leaflet_url"] == "https://www.drmax.sk/drug/p_1/"
+
+
+def test_update_medicine_preserves_leaflet_url(db, sample_medicine):
+    """update_medicine should persist leaflet_url."""
+    sample_medicine.leaflet_url = "https://www.drmax.sk/paracetamol/p_1/"
+    db.add_medicine(sample_medicine)
+    sample_medicine.quantity = 5
+    db.update_medicine(sample_medicine)
+    result = db.get_medicine(sample_medicine.medicine_id)
+    assert result.leaflet_url == "https://www.drmax.sk/paracetamol/p_1/"
