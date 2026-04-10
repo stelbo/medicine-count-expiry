@@ -6,7 +6,9 @@ import base64
 import json
 import logging
 import random
-from typing import Any
+import re
+import urllib.parse
+from typing import Any, Optional
 
 from ..const import CLAUDE_BASE_RETRY_DELAY, CLAUDE_MAX_RETRIES, CLAUDE_MAX_RETRY_DELAY
 
@@ -217,6 +219,74 @@ Please respond with a JSON object:
 
 If you cannot determine this with reasonable confidence, return null for days_valid_after_opening.
 Respond ONLY with the JSON object, no other text."""
+
+
+_DRMAX_SEARCH_URL = "https://www.drmax.sk/search/?string={}"
+_DRMAX_EXCLUDED_PATHS = r"(?!search|cart|account|login|register|category|blog|kontakt|o-nas)"
+_DRMAX_PRODUCT_PATTERNS = [
+    # Structured data / JSON-LD product URLs
+    r'"url"\s*:\s*"(https://www\.drmax\.sk/[^"]+)"',
+    # Anchor hrefs pointing to product detail pages (avoid search/category/utility pages)
+    rf'href="(https://www\.drmax\.sk/{_DRMAX_EXCLUDED_PATHS}[^"]+\.html[^"]*)"',
+    rf'href="(https://www\.drmax\.sk/{_DRMAX_EXCLUDED_PATHS}[a-z0-9][^"]{{10,}})"',
+]
+
+
+async def search_drmax_url(session: Any, medicine_name: str) -> Optional[str]:
+    """Search DrMax.sk pharmacy for a medicine and return the best matching URL.
+
+    Fetches the DrMax.sk search results page and tries to extract the first
+    product URL.  Falls back to the search URL if no product page can be found
+    or if the request fails.
+
+    Args:
+        session: An aiohttp ClientSession (e.g. from async_get_clientsession).
+        medicine_name: The name of the medicine to search for.
+
+    Returns:
+        A direct product URL string, or the search URL as a fallback.
+    """
+    encoded = urllib.parse.quote(medicine_name)
+    search_url = _DRMAX_SEARCH_URL.format(encoded)
+
+    try:
+        import aiohttp as _aiohttp  # noqa: PLC0415
+
+        timeout = _aiohttp.ClientTimeout(total=10)
+        async with session.get(
+            search_url,
+            timeout=timeout,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; HomeAssistant/1.0)"},
+            allow_redirects=True,
+        ) as resp:
+            if resp.status != 200:
+                _LOGGER.debug(
+                    "DrMax search returned HTTP %s for %s, using search URL",
+                    resp.status,
+                    medicine_name,
+                )
+                return search_url
+
+            html = await resp.text()
+
+            for pattern in _DRMAX_PRODUCT_PATTERNS:
+                matches = re.findall(pattern, html)
+                if matches:
+                    product_url = matches[0]
+                    _LOGGER.debug(
+                        "DrMax product URL for %s: %s", medicine_name, product_url
+                    )
+                    return product_url
+
+            _LOGGER.debug(
+                "No product URL found on DrMax for %s, using search URL", medicine_name
+            )
+    except Exception as exc:  # noqa: BLE001
+        _LOGGER.warning(
+            "Failed to search DrMax.sk for medicine '%s': %s", medicine_name, exc
+        )
+
+    return search_url
 
 
 class ClaudeVerifier:
