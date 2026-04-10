@@ -961,7 +961,7 @@ async def test_search_drmax_url_returns_product_url():
     result = await search_drmax_url(mock_session, "Paracetamol 500mg")
 
     assert "drmax.sk" in result
-    assert result != "https://www.drmax.sk/search/?string=Paracetamol%20500mg"
+    assert result != "https://www.drmax.sk/search/?string=Paracetamol+500mg"
 
 
 @pytest.mark.asyncio
@@ -980,7 +980,7 @@ async def test_search_drmax_url_falls_back_on_no_match():
 
     result = await search_drmax_url(mock_session, "UnknownMedicine XYZ")
 
-    assert result == "https://www.drmax.sk/search/?string=UnknownMedicine%20XYZ"
+    assert result == "https://www.drmax.sk/search/?string=UnknownMedicine+XYZ"
 
 
 @pytest.mark.asyncio
@@ -996,7 +996,7 @@ async def test_search_drmax_url_falls_back_on_http_error():
 
     result = await search_drmax_url(mock_session, "Ibuprofen 400mg")
 
-    assert result == "https://www.drmax.sk/search/?string=Ibuprofen%20400mg"
+    assert result == "https://www.drmax.sk/search/?string=Ibuprofen+400mg"
 
 
 @pytest.mark.asyncio
@@ -1007,4 +1007,4 @@ async def test_search_drmax_url_falls_back_on_exception():
 
     result = await search_drmax_url(mock_session, "Aspirin 100mg")
 
-    assert result == "https://www.drmax.sk/search/?string=Aspirin%20100mg"
+    assert result == "https://www.drmax.sk/search/?string=Aspirin+100mg"
