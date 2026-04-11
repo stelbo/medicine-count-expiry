@@ -246,7 +246,7 @@ async def search_drmax_url(session: Any, medicine_name: str) -> Optional[str]:
     Returns:
         A direct product URL string, or the search URL as a fallback.
     """
-    encoded = urllib.parse.quote(medicine_name)
+    encoded = urllib.parse.quote_plus(medicine_name)
     search_url = _DRMAX_SEARCH_URL.format(encoded)
 
     try:
